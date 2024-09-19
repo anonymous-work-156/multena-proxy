@@ -82,22 +82,22 @@ func (c *ConfigMapHandler) Connect(_ App) error {
 func (c *ConfigMapHandler) GetLabels(token OAuthToken) (map[string]bool, bool) {
 	username := token.PreferredUsername
 	groups := token.Groups
-	mergedNamespaces := make(map[string]bool, len(c.labels[username])*2)
+	mergedValues := make(map[string]bool, len(c.labels[username])*2)
 	for k := range c.labels[username] {
-		mergedNamespaces[k] = true
+		mergedValues[k] = true
 		if k == "#cluster-wide" {
 			return nil, true
 		}
 	}
 	for _, group := range groups {
 		for k := range c.labels[group] {
-			mergedNamespaces[k] = true
+			mergedValues[k] = true
 			if k == "#cluster-wide" {
 				return nil, true
 			}
 		}
 	}
-	return mergedNamespaces, false
+	return mergedValues, false
 }
 
 type MySQLHandler struct {
