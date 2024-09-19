@@ -69,7 +69,7 @@ func (a *App) WithLoki() *App {
 		{Url: "/api/v1/query_exemplars", MatchWord: "query"},
 		{Url: "/api/v1/status/buildinfo", MatchWord: "query"},
 	}
-	lokiRouter := a.e.PathPrefix("/loki").Subrouter()
+	lokiRouter := a.e.PathPrefix(a.Cfg.Loki.PathPrefix).Subrouter()
 	for _, route := range routes {
 		log.Trace().Any("route", route).Msg("Loki route")
 		lokiRouter.HandleFunc(route.Url, handler(route.MatchWord,
@@ -102,7 +102,7 @@ func (a *App) WithThanos() *App {
 		{Url: "/api/v1/query_exemplars", MatchWord: "query"},
 		{Url: "/api/v1/status/buildinfo", MatchWord: "query"},
 	}
-	thanosRouter := a.e.PathPrefix("").Subrouter()
+	thanosRouter := a.e.PathPrefix(a.Cfg.Thanos.PathPrefix).Subrouter()
 	for _, route := range routes {
 		log.Trace().Any("route", route).Msg("Thanos route")
 		thanosRouter.HandleFunc(route.Url,

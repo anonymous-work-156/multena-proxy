@@ -55,6 +55,7 @@ type Config struct {
 	} `mapstructure:"db"`
 
 	Thanos struct {
+		PathPrefix   string            `mapstructure:"path_prefix"`
 		URL          string            `mapstructure:"url"`
 		TenantLabel  string            `mapstructure:"tenant_label"`
 		UseMutualTLS bool              `mapstructure:"use_mutual_tls"`
@@ -62,7 +63,9 @@ type Config struct {
 		Key          string            `mapstructure:"key"`
 		Headers      map[string]string `mapstructure:"headers"`
 	} `mapstructure:"thanos"`
+
 	Loki struct {
+		PathPrefix   string            `mapstructure:"path_prefix"`
 		URL          string            `mapstructure:"url"`
 		TenantLabel  string            `mapstructure:"tenant_label"`
 		UseMutualTLS bool              `mapstructure:"use_mutual_tls"`
