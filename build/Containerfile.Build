@@ -4,13 +4,20 @@ COPY go.mod go.sum ./
 RUN go mod tidy
 COPY . .
 RUN go build .
-RUN chgrp -R 0 /app && chmod -R g=u /app
+
+RUN addgroup gouser &&  \
+    adduser --disabled-password --ingroup gouser --uid 19998 --shell /bin/false gouser && \
+    grep gouser /etc/passwd > /etc/passwd_gouser && \
+    grep gouser /etc/group > /etc/group_gouser && \
+    chown -R gouser.gouser /app && \
+    chmod -R go-xw /app
 
 FROM scratch
 WORKDIR /app/
 COPY --from=go-builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/ca/ca-certificates.crt
 COPY --from=go-builder /app/multena-proxy/multena-proxy .
+COPY --from=go-builder /etc/passwd_gouser /etc/passwd
+COPY --from=go-builder /etc/group_gouser /etc/group
 
-HEALTHCHECK --timeout=10s CMD curl --fail http://localhost:8080/healthz || exit 1
-USER nonroot:nonroot
-ENTRYPOINT ["multena-proxy"]
+USER gouser:gouser
+ENTRYPOINT ["/app/multena-proxy"]
