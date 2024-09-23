@@ -4,15 +4,16 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
+
 	"github.com/MicahParks/keyfunc/v3"
 	"github.com/fsnotify/fsnotify"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
-	"net/http"
-	"os"
-	"path/filepath"
-	"strings"
 )
 
 type Config struct {
@@ -22,15 +23,16 @@ type Config struct {
 	} `mapstructure:"log"`
 
 	Web struct {
-		ProxyPort           int    `mapstructure:"proxy_port"`
-		MetricsPort         int    `mapstructure:"metrics_port"`
+		ProxyPort           int    `mapstructure:"proxy_port"`   // where clients come to talk to us
+		MetricsPort         int    `mapstructure:"metrics_port"` // for Prometheus-like engine to scrape us
 		Host                string `mapstructure:"host"`
 		TLSVerifySkip       bool   `mapstructure:"tls_verify_skip"`
 		TrustedRootCaPath   string `mapstructure:"trusted_root_ca_path"`
 		LabelStoreKind      string `mapstructure:"label_store_kind"`
 		JwksCertURL         string `mapstructure:"jwks_cert_url"`
-		OAuthGroupName      string `mapstructure:"oauth_group_name"`
+		OAuthGroupName      string `mapstructure:"oauth_group_name"` // the token claim field name in which to find group membership
 		ServiceAccountToken string `mapstructure:"service_account_token"`
+		HeaderContainingJWT string `mapstructure:"header_containing_jwt"`
 	} `mapstructure:"web"`
 
 	Admin struct {
@@ -55,9 +57,9 @@ type Config struct {
 	} `mapstructure:"db"`
 
 	Thanos struct {
-		PathPrefix   string            `mapstructure:"path_prefix"`
-		URL          string            `mapstructure:"url"`
-		TenantLabel  string            `mapstructure:"tenant_label"`
+		PathPrefix   string            `mapstructure:"path_prefix"`  // the path where this service will be offered
+		URL          string            `mapstructure:"url"`          // the service we proxy traffic to
+		TenantLabel  string            `mapstructure:"tenant_label"` // the label to enforce values of
 		UseMutualTLS bool              `mapstructure:"use_mutual_tls"`
 		Cert         string            `mapstructure:"cert"`
 		Key          string            `mapstructure:"key"`
@@ -65,9 +67,9 @@ type Config struct {
 	} `mapstructure:"thanos"`
 
 	Loki struct {
-		PathPrefix   string            `mapstructure:"path_prefix"`
-		URL          string            `mapstructure:"url"`
-		TenantLabel  string            `mapstructure:"tenant_label"`
+		PathPrefix   string            `mapstructure:"path_prefix"`  // the path where this service will be offered
+		URL          string            `mapstructure:"url"`          // the service we proxy traffic to
+		TenantLabel  string            `mapstructure:"tenant_label"` // the label to enforce values of
 		UseMutualTLS bool              `mapstructure:"use_mutual_tls"`
 		Cert         string            `mapstructure:"cert"`
 		Key          string            `mapstructure:"key"`

@@ -41,15 +41,19 @@ func getToken(r *http.Request, a *App) (OAuthToken, error) {
 // trimBearerToken extracts the token from the Authorization header of the HTTP request.
 // It trims the "Bearer" prefix from the Authorization header and returns the actual token.
 func trimBearerToken(r *http.Request) (string, error) {
-	authToken := r.Header.Get("Authorization")
+	authToken := r.Header.Get("Authorization") // here HeaderContainingJWT
 	if authToken == "" {
-		return "", errors.New("no Authorization header found")
+		return "", errors.New("got no value for the HTTP header which is expected to contain the JWT")
 	}
-	splitToken := strings.Split(authToken, "Bearer")
-	if len(splitToken) != 2 {
-		return "", errors.New("invalid Authorization header")
+	if strings.HasPrefix(authToken, "Bearer ") {
+		// we can probably not care about the formality around "Bearer" existing or not, we just want a JWT
+		splitToken := strings.Split(authToken, "Bearer")
+		if len(splitToken) != 2 {
+			return "", errors.New("failed to remove the bearer prefix from the JWT")
+		}
+		return strings.TrimSpace(splitToken[1]), nil
 	}
-	return strings.TrimSpace(splitToken[1]), nil
+	return authToken, nil
 }
 
 // parseJwtToken parses the JWT token string and constructs an OAuthToken from the parsed claims.
@@ -64,18 +68,24 @@ func parseJwtToken(tokenString string, a *App) (OAuthToken, *jwt.Token, error) {
 	}
 
 	if v, ok := claimsMap["preferred_username"].(string); ok {
+		log.Debug().Msg("Found value for preferred_username in token")
 		oAuthToken.PreferredUsername = v
+	} else {
+		log.Warn().Msg("Failed to find value for preferred_username in token")
 	}
 	if v, ok := claimsMap["email"].(string); ok {
 		oAuthToken.Email = v
 	}
 
 	if v, ok := claimsMap[a.Cfg.Web.OAuthGroupName].([]interface{}); ok {
+		log.Debug().Msg("Found value for group in token")
 		for _, item := range v {
 			if s, ok := item.(string); ok {
 				oAuthToken.Groups = append(oAuthToken.Groups, s)
 			}
 		}
+	} else {
+		log.Warn().Msg("Failed to find value for group in token")
 	}
 	return oAuthToken, token, err
 }
