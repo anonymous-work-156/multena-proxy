@@ -11,6 +11,7 @@ web:
   label_store_kind: "configmap" # label provider either configmap or mysql
   jwks_cert_url: https://sso.example.com/realms/internal/protocol/openid-connect/certs # url to jwks cert of oauth provider
   oauth_group_name: "groups" # name of the group field in the jwt
+  header_containing_jwt: Authorization
 
 admin:
   bypass: true # enable admin bypass
@@ -31,6 +32,7 @@ db:
   token_key: "email" # field in the jwt to use in the sql query
 
 thanos:
+  path_prefix: ""
   url: https://localhost:9091 # url to thanos querier
   tenant_label: namespace # label to use for tenant
   cert: "./certs/thanos/tls.crt" # path to thanos mtls cert
@@ -40,6 +42,7 @@ thanos:
     "compresion": "gzip" # header to use
 
 loki:
+  path_prefix: "/loki"
   url: https://localhost:3100 # url to loki querier
   tenant_label: kubernetes_namespace_name # label to use for tenant
   cert: "./certs/loki/tls.crt" # path to loki mtls cert
