@@ -24,7 +24,7 @@ type OAuthToken struct {
 // getToken retrieves the OAuth token from the incoming HTTP request.
 // It extracts, parses, and validates the token from the Authorization header.
 func getToken(r *http.Request, a *App) (OAuthToken, error) {
-	authToken, err := trimBearerToken(r)
+	authToken, err := trimBearerToken(r, a.Cfg.Web.HeaderContainingJWT)
 	if err != nil {
 		return OAuthToken{}, err
 	}
@@ -40,13 +40,12 @@ func getToken(r *http.Request, a *App) (OAuthToken, error) {
 
 // trimBearerToken extracts the token from the Authorization header of the HTTP request.
 // It trims the "Bearer" prefix from the Authorization header and returns the actual token.
-func trimBearerToken(r *http.Request) (string, error) {
-	authToken := r.Header.Get("Authorization") // here HeaderContainingJWT
+func trimBearerToken(r *http.Request, header_name string) (string, error) {
+	authToken := r.Header.Get(header_name)
 	if authToken == "" {
 		return "", errors.New("got no value for the HTTP header which is expected to contain the JWT")
 	}
-	if strings.HasPrefix(authToken, "Bearer ") {
-		// we can probably not care about the formality around "Bearer" existing or not, we just want a JWT
+	if header_name == "Authorization" {
 		splitToken := strings.Split(authToken, "Bearer")
 		if len(splitToken) != 2 {
 			return "", errors.New("failed to remove the bearer prefix from the JWT")
@@ -108,7 +107,7 @@ func validateLabels(token OAuthToken, a *App) (map[string]bool, bool, error) {
 	log.Debug().Str("user", token.PreferredUsername).Strs("labels", maps.Keys(tenantLabels)).Msg("")
 
 	if len(tenantLabels) < 1 {
-		return nil, false, fmt.Errorf("no tenant labels found")
+		return nil, false, fmt.Errorf("no tenant labels found") // TODO: can this error be surfaced better in Grafana?
 	}
 	return tenantLabels, false, nil
 }
