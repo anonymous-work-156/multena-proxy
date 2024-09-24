@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -35,7 +36,7 @@ func TestGetBearerToken(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			r := &http.Request{Header: http.Header{"Authorization": {tt.authHeader}}}
-			got, err := trimBearerToken(r)
+			got, err := trimBearerToken(r, "Authorization")
 			if (err != nil) != tt.expectErr {
 				t.Errorf("trimBearerToken() error = %v, expectErr %v", err, tt.expectErr)
 				return
@@ -52,30 +53,42 @@ func TestTrimBearerToken(t *testing.T) {
 
 	tests := []struct {
 		name          string
+		headerName    string
 		headerValue   string
 		expectedToken string
 		expectError   bool
 	}{
 		{
 			name:          "Valid token",
+			headerName:    "Authorization",
 			headerValue:   "Bearer example_token",
 			expectedToken: "example_token",
 			expectError:   false,
 		},
 		{
 			name:          "No Authorization header",
+			headerName:    "Authorization",
 			headerValue:   "",
 			expectedToken: "",
 			expectError:   true,
 		},
 		{
-			name:          "No Authorization header",
+			name:          "Invalid Authorization header",
+			headerName:    "Authorization",
 			headerValue:   "totally a jwt",
 			expectedToken: "",
 			expectError:   true,
 		},
 		{
+			name:          "Alternate header",
+			headerName:    "Authorization2",
+			headerValue:   "totally a jwt",
+			expectedToken: "totally a jwt",
+			expectError:   false,
+		},
+		{
 			name:          "Token with space",
+			headerName:    "Authorization",
 			headerValue:   "Bearer token_with_space ",
 			expectedToken: "token_with_space",
 			expectError:   false,
@@ -85,17 +98,20 @@ func TestTrimBearerToken(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req, _ := http.NewRequest("GET", "http://example.com", nil)
-			req.Header.Set("Authorization", tt.headerValue)
+			req.Header.Set(tt.headerName, tt.headerValue)
 
-			token, err := trimBearerToken(req)
+			token, err := trimBearerToken(req, tt.headerName)
 
 			assert.Equal(tt.expectedToken, token)
 
+			var happy bool
 			if tt.expectError {
-				assert.Error(err)
+				happy = assert.Error(err)
 			} else {
-				assert.NoError(err)
+				happy = assert.NoError(err)
 			}
+
+			log.Info().Bool("passed", happy).Str("name", tt.name).Msg("Auth test")
 		})
 	}
 }
