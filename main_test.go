@@ -288,7 +288,7 @@ func Test_reverseProxy(t *testing.T) {
 			name:             "Loki_query_range_with_forbidden_tenant",
 			authorization:    "Bearer " + tokens["userTenant"],
 			setAuthorization: true,
-			URL:              "../loki/api/v1/query_range?direction=backward&end=1690463973693000000&limit=10&query={tenant_id=\"forbidden_tenant\"} |= `path` |= `label` | json | line_format `{{.message}}` | json | line_format `{{.request}}` | json | line_format `{{.method}} {{.path}} {{.url | urldecode}}`&start=1690377573693000000&step=86400000ms",
+			URL:              "/loki/api/v1/query_range?direction=backward&end=1690463973693000000&limit=10&query={tenant_id=\"forbidden_tenant\"} |= `path` |= `label` | json | line_format `{{.message}}` | json | line_format `{{.request}}` | json | line_format `{{.method}} {{.path}} {{.url | urldecode}}`&start=1690377573693000000&step=86400000ms",
 			expectedStatus:   http.StatusForbidden,
 			expectedBody:     "unauthorized namespace forbidden_tenant\n",
 		},
