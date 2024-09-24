@@ -12,9 +12,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/rs/zerolog/log"
-
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -87,7 +86,7 @@ func setupTestMain() (App, map[string]string) {
 			Groups:   []string{"group1"},
 		},
 		{
-			name:     "groupsTenant",
+			name:     "twoGroupsTenant",
 			Username: "not-a-user",
 			Email:    "test-email",
 			Groups:   []string{"group1", "group2"},
@@ -117,6 +116,7 @@ func setupTestMain() (App, map[string]string) {
 
 	// Set up the JWKS server
 	jwksServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		log.Info().Msg("Fake JWKS server sending response.")
 		_, err := fmt.Fprintf(w, `{"keys":[{"kty":"EC","kid":"testKid","alg":"ES256","use":"sig","x":"%s","y":"%s","crv":"P-256"}]}`, x, y)
 		if err != nil {
 			return
@@ -130,7 +130,8 @@ func setupTestMain() (App, map[string]string) {
 
 	// Set up the upstream server
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, err := fmt.Fprintln(w, "Upstream server response")
+		log.Info().Msg("Fake metrics/logs server sending response.")
+		_, err := fmt.Fprintln(w, "< fake upstream server response >")
 		if err != nil {
 			return
 		}
@@ -143,9 +144,9 @@ func setupTestMain() (App, map[string]string) {
 
 	cmh := ConfigMapHandler{
 		labels: map[string]map[string]bool{
-			"user":   {"allowed_user": true, "also_allowed_user": true},
-			"group1": {"allowed_group1": true, "also_allowed_group1": true},
-			"group2": {"allowed_group2": true, "also_allowed_group2": true},
+			"user":   {"tenant_id_u1": true, "tenant_id_u2": true},
+			"group1": {"tenant_id_g1": true, "tenant_id_g2": true},
+			"group2": {"tenant_id_g3": true, "tenant_id_g4": true},
 		},
 	}
 
@@ -155,7 +156,7 @@ func setupTestMain() (App, map[string]string) {
 
 func Test_reverseProxy(t *testing.T) {
 	app, tokens := setupTestMain()
-	log.Level(2)
+	//log.Level(0)
 
 	cases := []struct {
 		name             string
@@ -169,7 +170,7 @@ func Test_reverseProxy(t *testing.T) {
 			name:           "Missing_headers",
 			URL:            "/api/v1/query_range",
 			expectedStatus: http.StatusForbidden,
-			expectedBody:   "no Authorization header found\n",
+			expectedBody:   "got no value for the HTTP header which is expected to contain the JWT\n",
 		},
 		{
 			name:             "Malformed_authorization_header:_B",
@@ -177,7 +178,7 @@ func Test_reverseProxy(t *testing.T) {
 			setAuthorization: true,
 			URL:              "/api/v1/query_range",
 			authorization:    "B",
-			expectedBody:     "invalid Authorization header\n",
+			expectedBody:     "failed to remove the bearer prefix from the JWT\n",
 		},
 		{
 			name:             "Malformed_authorization_header:_Bearer",
@@ -209,7 +210,7 @@ func Test_reverseProxy(t *testing.T) {
 			setAuthorization: true,
 			URL:              "/api/v1/query_range",
 			expectedStatus:   http.StatusOK,
-			expectedBody:     "Upstream server response\n",
+			expectedBody:     "< fake upstream server response >\n",
 		},
 		{
 			name:             "User_belongs_to_multiple_groups,_accessing_forbidden_tenant",
@@ -217,7 +218,7 @@ func Test_reverseProxy(t *testing.T) {
 			setAuthorization: true,
 			URL:              "/api/v1/query_range?query=up{tenant_id=\"forbidden_tenant\"}",
 			expectedStatus:   http.StatusForbidden,
-			expectedBody:     "user not allowed with namespace forbidden_tenant\n",
+			expectedBody:     "access not allowed with label value forbidden_tenant\n",
 		},
 		{
 			name:             "Not_a_User,_accessing_forbidden_tenant",
@@ -236,58 +237,58 @@ func Test_reverseProxy(t *testing.T) {
 			expectedBody:     "no tenant labels found\n",
 		},
 		{
-			name:             "User_belongs_to_multiple_groups,_accessing_allowed_tenant",
+			name:             "User_belongs_to_multiple_groups,_accessing_allowed_tenant_1",
 			authorization:    "Bearer " + tokens["groupTenant"],
 			setAuthorization: true,
-			URL:              "/api/v1/query?query=up{tenant_id=\"allowed_group1\"}",
+			URL:              "/api/v1/query?query=up{tenant_id=\"tenant_id_g1\"}",
 			expectedStatus:   http.StatusOK,
-			expectedBody:     "Upstream server response\n",
+			expectedBody:     "< fake upstream server response >\n",
 		},
 		{
-			name:             "User_belongs_to_multiple_groups,_accessing_allowed_tenants",
-			authorization:    "Bearer " + tokens["groupsTenant"],
+			name:             "User_belongs_to_multiple_groups,_accessing_allowed_tenants_1",
+			authorization:    "Bearer " + tokens["twoGroupsTenant"],
 			setAuthorization: true,
-			URL:              "/api/v1/query?query=up{tenant_id=~\"allowed_group1|also_allowed_group2\"}",
+			URL:              "/api/v1/query?query=up{tenant_id=~\"tenant_id_g1|tenant_id_g4\"}",
 			expectedStatus:   http.StatusOK,
-			expectedBody:     "Upstream server response\n",
+			expectedBody:     "< fake upstream server response >\n",
 		},
 		{
-			name:             "User_belongs_to_multiple_groups,_accessing_allowed_tenant",
-			authorization:    "Bearer " + tokens["groupsTenant"],
+			name:             "User_belongs_to_multiple_groups,_accessing_allowed_tenant_2",
+			authorization:    "Bearer " + tokens["twoGroupsTenant"],
 			setAuthorization: true,
-			URL:              "/api/v1/query_range?query={tenant_id=\"also_allowed_group1\"} != 1337",
+			URL:              "/api/v1/query?query={tenant_id=\"tenant_id_g2\"} != 1337",
 			expectedStatus:   http.StatusOK,
-			expectedBody:     "Upstream server response\n",
+			expectedBody:     "< fake upstream server response >\n",
 		},
 		{
-			name:             "User_belongs_to_multiple_groups,_accessing_allowed_tenants",
-			authorization:    "Bearer " + tokens["groupsTenant"],
+			name:             "User_belongs_to_multiple_groups,_accessing_allowed_tenants_2",
+			authorization:    "Bearer " + tokens["twoGroupsTenant"],
 			setAuthorization: true,
-			URL:              "/api/v1/query?query={tenant_id=~\"allowed_group1|allowed_group2\"} != 1337",
+			URL:              "/api/v1/query?query={tenant_id=~\"tenant_id_g1|tenant_id_g3\"} != 1337",
 			expectedStatus:   http.StatusOK,
-			expectedBody:     "Upstream server response\n",
+			expectedBody:     "< fake upstream server response >\n",
 		},
 		{
 			name:             "Loki_query_range,_accessing_allowed_tenant",
-			authorization:    "Bearer " + tokens["groupsTenant"],
+			authorization:    "Bearer " + tokens["twoGroupsTenant"],
 			setAuthorization: true,
-			URL:              "/loki/api/v1/query_range?direction=backward&end=1690463973787000000&limit=1000&query=sum by (level) (count_over_time({tenant_id=\"allowed_group1\"} |= `path` |= `label` | json | line_format `{{.message}}` | json | line_format `{{.request}}` | json | line_format `{{.method | printf \"%-4s\"}} {{.path | printf \"%-60s\"}} {{.url | urldecode}}`[1m]))&start=1690377573787000000&step=60000ms",
+			URL:              "/loki/api/v1/query_range?direction=backward&end=1690463973787000000&limit=1000&query=sum by (level) (count_over_time({tenant_id=\"tenant_id_g1\"} |= `path` |= `label` | json | line_format `{{.message}}` | json | line_format `{{.request}}` | json | line_format `{{.method | printf \"%-4s\"}} {{.path | printf \"%-60s\"}} {{.url | urldecode}}`[1m]))&start=1690377573787000000&step=60000ms",
 			expectedStatus:   http.StatusOK,
-			expectedBody:     "Upstream server response\n",
+			expectedBody:     "< fake upstream server response >\n",
 		},
 		{
 			name:             "Loki_index_stats,_accessing_allowed_tenant",
 			authorization:    "Bearer " + tokens["userTenant"],
 			setAuthorization: true,
-			URL:              "/loki/api/v1/index/stats?query={tenant_id=\"allowed_user\"}&start=1690377573724000000&end=1690463973724000000",
+			URL:              "/loki/api/v1/index/stats?query={tenant_id=\"tenant_id_u1\"}&start=1690377573724000000&end=1690463973724000000",
 			expectedStatus:   http.StatusOK,
-			expectedBody:     "Upstream server response\n",
+			expectedBody:     "< fake upstream server response >\n",
 		},
 		{
 			name:             "Loki_query_range_with_forbidden_tenant",
 			authorization:    "Bearer " + tokens["userTenant"],
 			setAuthorization: true,
-			URL:              "/loki/api/v1/query_range?direction=backward&end=1690463973693000000&limit=10&query={tenant_id=\"forbidden_tenant\"} |= `path` |= `label` | json | line_format `{{.message}}` | json | line_format `{{.request}}` | json | line_format `{{.method}} {{.path}} {{.url | urldecode}}`&start=1690377573693000000&step=86400000ms",
+			URL:              "../loki/api/v1/query_range?direction=backward&end=1690463973693000000&limit=10&query={tenant_id=\"forbidden_tenant\"} |= `path` |= `label` | json | line_format `{{.message}}` | json | line_format `{{.request}}` | json | line_format `{{.method}} {{.path}} {{.url | urldecode}}`&start=1690377573693000000&step=86400000ms",
 			expectedStatus:   http.StatusForbidden,
 			expectedBody:     "unauthorized namespace forbidden_tenant\n",
 		},
@@ -296,7 +297,9 @@ func Test_reverseProxy(t *testing.T) {
 	app.WithRoutes()
 
 	for _, tc := range cases {
+
 		t.Run(tc.name, func(t *testing.T) {
+
 			// Create a request
 			req, err := http.NewRequest("GET", tc.URL, nil)
 			if err != nil {
@@ -315,12 +318,14 @@ func Test_reverseProxy(t *testing.T) {
 			app.e.ServeHTTP(rr, req)
 
 			// Check the status code
-			assert.Equal(t, tc.expectedStatus, rr.Code)
+			happy := assert.Equal(t, tc.expectedStatus, rr.Code)
 
 			// Check the response body
 			if tc.expectedBody != "" {
-				assert.Contains(t, rr.Body.String(), tc.expectedBody)
+				happy = happy && assert.Contains(t, rr.Body.String(), tc.expectedBody)
 			}
+
+			log.Info().Bool("passed", happy).Str("name", tc.name).Msg("Reverse proxy test")
 		})
 	}
 }
