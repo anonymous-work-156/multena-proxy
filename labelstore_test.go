@@ -3,17 +3,21 @@ package main
 import (
 	"testing"
 
+	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestGetLabelsCM(t *testing.T) {
+
 	cmh := ConfigMapHandler{
+		// config keys that are ingested through the Viper lib will be lower case
+		// if we set upper case directly in this test, it will not represent real world
 		labels: map[string]map[string]bool{
 			"user1":      {"u1": true, "u2": true},
 			"user2":      {"u3": true, "u4": true},
 			"group1":     {"g1": true, "g2": true},
 			"group2":     {"g3": true, "g4": true},
-			"adminGroup": {"#cluster-wide": true, "g4": true},
+			"admingroup": {"#cluster-wide": true, "g4": true},
 		},
 	}
 
@@ -74,10 +78,13 @@ func TestGetLabelsCM(t *testing.T) {
 	}
 
 	for _, tc := range cases {
+
 		t.Run(tc.name, func(t *testing.T) {
 			labels, skip := cmh.GetLabels(OAuthToken{PreferredUsername: tc.username, Groups: tc.groups})
-			assert.Equal(t, tc.expected, labels)
-			assert.Equal(t, tc.skip, skip)
+			happy := assert.Equal(t, tc.expected, labels)
+			happy = happy && assert.Equal(t, tc.skip, skip)
+
+			log.Info().Bool("passed", happy).Str("name", tc.name).Msg("Labelstore test")
 		})
 	}
 }
