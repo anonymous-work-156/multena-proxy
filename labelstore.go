@@ -80,17 +80,24 @@ func (c *ConfigMapHandler) Connect(_ App) error {
 }
 
 func (c *ConfigMapHandler) GetLabels(token OAuthToken) (map[string]bool, bool) {
-	username := token.PreferredUsername
+	// NOTE: the config system (Viper) is case-insensitive for keys, which appears to mean it returns lower-case for our maps of label to bool
+	username := strings.ToLower(token.PreferredUsername)
 	groups := token.Groups
 	mergedValues := make(map[string]bool, len(c.labels[username])*2)
-	for k := range c.labels[username] {
+	for k, v := range c.labels[username] {
+		if !v {
+			continue // pointing a key at false is the same as not including the key at all
+		}
 		mergedValues[k] = true
 		if k == "#cluster-wide" {
 			return nil, true
 		}
 	}
 	for _, group := range groups {
-		for k := range c.labels[group] {
+		for k, v := range c.labels[strings.ToLower(group)] {
+			if !v {
+				continue // pointing a key at false is the same as not including the key at all
+			}
 			mergedValues[k] = true
 			if k == "#cluster-wide" {
 				return nil, true
