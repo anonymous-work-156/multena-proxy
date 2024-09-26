@@ -17,7 +17,7 @@ type PromQLEnforcer struct{}
 // Enforce enhances a given PromQL query string with additional label matchers,
 // ensuring that the query complies with the allowed tenant labels and specified label match.
 // It returns the enhanced query or an error if the query cannot be parsed or is not compliant.
-func (PromQLEnforcer) Enforce(query string, allowedTenantLabels map[string]bool, labelMatch string) (string, error) {
+func (PromQLEnforcer) Enforce(query string, allowedTenantLabels map[string]bool, tenantLabelName string) (string, error) {
 	log.Trace().Str("function", "enforcer").Str("query", query).Msg("input")
 	if query == "" {
 		operator := "="
@@ -25,7 +25,7 @@ func (PromQLEnforcer) Enforce(query string, allowedTenantLabels map[string]bool,
 			operator = "=~"
 		}
 		query = fmt.Sprintf("{%s%s\"%s\"}",
-			labelMatch,
+			tenantLabelName,
 			operator,
 			strings.Join(MapKeysToArray(allowedTenantLabels),
 				"|"))
@@ -41,12 +41,12 @@ func (PromQLEnforcer) Enforce(query string, allowedTenantLabels map[string]bool,
 		return "", err
 	}
 
-	tenantLabels, err := enforceLabels(queryLabels, allowedTenantLabels, labelMatch)
+	observedTenantLabelValues, err := enforceLabels(queryLabels, allowedTenantLabels, tenantLabelName)
 	if err != nil {
 		return "", err
 	}
 
-	labelEnforcer := createEnforcer(tenantLabels, labelMatch)
+	labelEnforcer := createEnforcer(observedTenantLabelValues, tenantLabelName)
 	err = labelEnforcer.EnforceNode(expr)
 	if err != nil {
 		return "", err
@@ -74,13 +74,13 @@ func extractLabelsAndValues(expr parser.Expr) (map[string]string, error) {
 // enforceLabels checks if provided query labels comply with allowed tenant labels and a specified label match.
 // If the labels comply, it returns them (or all allowed tenant labels if not specified in the query) and nil.
 // If not, it returns an error indicating the non-compliant label.
-func enforceLabels(queryLabels map[string]string, allowedTenantLabels map[string]bool, labelMatch string) ([]string, error) {
-	if _, ok := queryLabels[labelMatch]; ok {
-		ok, tenantLabels := checkLabels(queryLabels, allowedTenantLabels, labelMatch)
+func enforceLabels(queryLabels map[string]string, allowedTenantLabels map[string]bool, tenantLabelName string) ([]string, error) {
+	if _, ok := queryLabels[tenantLabelName]; ok {
+		ok, observedTenantLabelValues := checkLabels(queryLabels, allowedTenantLabels, tenantLabelName)
 		if !ok {
-			return nil, fmt.Errorf("access not allowed with label value %s", tenantLabels[0])
+			return nil, fmt.Errorf("access not allowed with label value %s", observedTenantLabelValues[0])
 		}
-		return tenantLabels, nil
+		return observedTenantLabelValues, nil
 	}
 
 	return MapKeysToArray(allowedTenantLabels), nil
@@ -88,8 +88,8 @@ func enforceLabels(queryLabels map[string]string, allowedTenantLabels map[string
 
 // checkLabels validates if query labels are present in the allowed tenant labels and returns them.
 // If a query label is not allowed, it returns false and the non-compliant label.
-func checkLabels(queryLabels map[string]string, allowedTenantLabels map[string]bool, labelMatch string) (bool, []string) {
-	splitQueryLabels := strings.Split(queryLabels[labelMatch], "|")
+func checkLabels(queryLabels map[string]string, allowedTenantLabels map[string]bool, tenantLabelName string) (bool, []string) {
+	splitQueryLabels := strings.Split(queryLabels[tenantLabelName], "|")
 	for _, queryLabel := range splitQueryLabels {
 		_, ok := allowedTenantLabels[queryLabel]
 		if !ok {
@@ -99,17 +99,17 @@ func checkLabels(queryLabels map[string]string, allowedTenantLabels map[string]b
 	return true, splitQueryLabels
 }
 
-func createEnforcer(tenantLabels []string, labelMatch string) *enforcer.Enforcer {
+func createEnforcer(observedTenantLabelValues []string, tenantLabelName string) *enforcer.PromQLEnforcer {
 	var matchType labels.MatchType
-	if len(tenantLabels) > 1 {
+	if len(observedTenantLabelValues) > 1 {
 		matchType = labels.MatchRegexp
 	} else {
 		matchType = labels.MatchEqual
 	}
 
-	return enforcer.NewEnforcer(true, &labels.Matcher{
-		Name:  labelMatch,
+	return enforcer.NewPromQLEnforcer(true, &labels.Matcher{
+		Name:  tenantLabelName,
 		Type:  matchType,
-		Value: strings.Join(tenantLabels, "|"),
+		Value: strings.Join(observedTenantLabelValues, "|"),
 	})
 }
