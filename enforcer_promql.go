@@ -1,7 +1,10 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 
 	"github.com/rs/zerolog/log"
@@ -11,105 +14,170 @@ import (
 	"github.com/prometheus/prometheus/promql/parser"
 )
 
+type LabelValueInfo struct {
+	Value string
+	Type  labels.MatchType
+}
+
 // PromQLEnforcer is a struct with methods to enforce specific rules on Prometheus Query Language (PromQL) queries.
 type PromQLEnforcer struct{}
 
 // Enforce enhances a given PromQL query string with additional label matchers,
 // ensuring that the query complies with the allowed tenant labels and specified label match.
 // It returns the enhanced query or an error if the query cannot be parsed or is not compliant.
-func (PromQLEnforcer) Enforce(query string, allowedTenantLabels map[string]bool, tenantLabelName string) (string, error) {
-	log.Trace().Str("function", "enforcer").Str("query", query).Msg("input")
+func (PromQLEnforcer) Enforce(query string, allowedTenantLabelValues map[string]bool, tenantLabelName string) (string, error) {
+	log.Trace().Str("function", "enforcer").Str("input query", query).Msg("")
+	allowedTenantLabelValues2 := MapKeysToArray(allowedTenantLabelValues)
+
 	if query == "" {
 		operator := "="
-		if len(allowedTenantLabels) > 1 {
+		if len(allowedTenantLabelValues2) > 1 {
 			operator = "=~"
 		}
 		query = fmt.Sprintf("{%s%s\"%s\"}",
 			tenantLabelName,
 			operator,
-			strings.Join(MapKeysToArray(allowedTenantLabels),
-				"|"))
+			strings.Join(allowedTenantLabelValues2, "|"))
+		log.Trace().Str("function", "enforcer").Str("default query", query).Msg("")
 	}
-	log.Trace().Str("function", "enforcer").Str("query", query).Msg("enforcing")
+
 	expr, err := parser.ParseExpr(query)
 	if err != nil {
+		log.Warn().Msg("Failed to parse query.")
 		return "", err
 	}
 
-	queryLabels, err := extractLabelsAndValues(expr)
+	extractedLabelInfo, err := extractTenantValues(expr, tenantLabelName)
 	if err != nil {
+		log.Warn().Msg("The query cannot be handled because of a problem with tenant label values and/or operators.")
 		return "", err
 	}
 
-	observedTenantLabelValues, err := enforceLabels(queryLabels, allowedTenantLabels, tenantLabelName)
+	processedLabelInfo, err := processLabelValues(extractedLabelInfo, allowedTenantLabelValues2)
 	if err != nil {
+		log.Warn().Msg("Unable to process the label values.")
 		return "", err
 	}
 
-	labelEnforcer := createEnforcer(observedTenantLabelValues, tenantLabelName)
+	labelEnforcer := enforcer.NewPromQLEnforcer(false, &labels.Matcher{
+		Name:  tenantLabelName,
+		Type:  processedLabelInfo.Type,
+		Value: processedLabelInfo.Value,
+	})
+
 	err = labelEnforcer.EnforceNode(expr)
 	if err != nil {
+		log.Warn().Msg("The promql label enforcer was unhappy.")
 		return "", err
 	}
-	log.Trace().Str("function", "enforcer").Str("query", expr.String()).Msg("enforcing")
+	log.Trace().Str("function", "enforcer").Str("approved query", expr.String()).Msg("")
+	log.Trace().Msg("Returning approved expression.")
 	return expr.String(), nil
 }
 
-// extractLabelsAndValues parses a PromQL expression and extracts labels and their values.
+// extractTenantValues parses a PromQL expression and extracts labels and their values.
 // It returns a map where keys are label names and values are corresponding label values.
-// An error is returned if the expression cannot be parsed.
-func extractLabelsAndValues(expr parser.Expr) (map[string]string, error) {
-	l := make(map[string]string)
+// An error is returned if the expression cannot be parsed, or if the tenant label appears with a different operator, or with a different value.
+func extractTenantValues(expr parser.Expr, tenantLabelName string) (*LabelValueInfo, error) {
+	var info map[LabelValueInfo]bool = make(map[LabelValueInfo]bool)
 	parser.Inspect(expr, func(node parser.Node, path []parser.Node) error {
 		if vector, ok := node.(*parser.VectorSelector); ok {
 			for _, matcher := range vector.LabelMatchers {
-				l[matcher.Name] = matcher.Value
+				if matcher.Name != tenantLabelName {
+					continue
+				}
+				thisinfo := LabelValueInfo{matcher.Value, matcher.Type}
+				_, ok = info[thisinfo]
+				if !ok {
+					info[thisinfo] = true
+				}
 			}
 		}
 		return nil
 	})
-	return l, nil
-}
-
-// enforceLabels checks if provided query labels comply with allowed tenant labels and a specified label match.
-// If the labels comply, it returns them (or all allowed tenant labels if not specified in the query) and nil.
-// If not, it returns an error indicating the non-compliant label.
-func enforceLabels(queryLabels map[string]string, allowedTenantLabels map[string]bool, tenantLabelName string) ([]string, error) {
-	if _, ok := queryLabels[tenantLabelName]; ok {
-		ok, observedTenantLabelValues := checkLabels(queryLabels, allowedTenantLabels, tenantLabelName)
-		if !ok {
-			return nil, fmt.Errorf("access not allowed with label value %s", observedTenantLabelValues[0])
+	if len(info) == 1 {
+		for v := range maps.Keys(info) {
+			// WTF Go, is this the best way?
+			return &v, nil
 		}
-		return observedTenantLabelValues, nil
 	}
-
-	return MapKeysToArray(allowedTenantLabels), nil
+	if len(info) > 1 {
+		return nil, errors.New("found conflicting values or operators for tenant label")
+	}
+	return nil, nil
 }
 
-// checkLabels validates if query labels are present in the allowed tenant labels and returns them.
+// processLabelValues validates if query labels are present in the allowed tenant labels and returns them.
 // If a query label is not allowed, it returns false and the non-compliant label.
-func checkLabels(queryLabels map[string]string, allowedTenantLabels map[string]bool, tenantLabelName string) (bool, []string) {
-	splitQueryLabels := strings.Split(queryLabels[tenantLabelName], "|")
-	for _, queryLabel := range splitQueryLabels {
-		_, ok := allowedTenantLabels[queryLabel]
-		if !ok {
-			return false, []string{queryLabel}
+func processLabelValues(extractedLabelInfo *LabelValueInfo, allowedTenantLabelValues2 []string) (*LabelValueInfo, error) {
+
+	// when no tenant label has been provided by the client
+	if extractedLabelInfo == nil {
+		if len(allowedTenantLabelValues2) == 1 {
+			return &LabelValueInfo{allowedTenantLabelValues2[0], labels.MatchEqual}, nil
+		}
+		if len(allowedTenantLabelValues2) == 0 {
+			return &LabelValueInfo{"", labels.MatchEqual}, nil
+		}
+
+		// all the allowed values in one regex
+		val := strings.Join(allowedTenantLabelValues2, "|")
+		return &LabelValueInfo{val, labels.MatchRegexp}, nil
+	}
+
+	if extractedLabelInfo.Type == labels.MatchEqual {
+		// equal one of the allowed values
+		if slices.Contains(allowedTenantLabelValues2, extractedLabelInfo.Value) {
+			return extractedLabelInfo, nil
+		}
+	} else {
+
+		var toInclude []string
+		if extractedLabelInfo.Type == labels.MatchNotEqual {
+
+			// match all of the allowed values except possibly one of them
+			for _, val := range allowedTenantLabelValues2 {
+				if val != extractedLabelInfo.Value {
+					toInclude = append(toInclude, val)
+				}
+			}
+
+		} else {
+			rx, err := labels.NewFastRegexMatcher(extractedLabelInfo.Value)
+			if err != nil {
+				return nil, err
+			}
+
+			var want bool
+			if extractedLabelInfo.Type == labels.MatchRegexp {
+				// whatever of the values match the regex
+				want = true
+			} else if extractedLabelInfo.Type == labels.MatchNotRegexp {
+				// whatever of the values do not match the regex
+				want = false
+			} else {
+				// FIXME: this is probably not the proper way to handle the situation
+				return nil, errors.New("unsupported operator")
+			}
+
+			for _, val := range allowedTenantLabelValues2 {
+				if rx.MatchString(val) == want {
+					toInclude = append(toInclude, val)
+				}
+			}
+		}
+
+		if len(toInclude) == 1 {
+			// one value to match can be handled without regex
+			return &LabelValueInfo{toInclude[0], labels.MatchEqual}, nil
+		}
+		if len(toInclude) > 0 {
+			// multi-matches requires a regex
+			val := strings.Join(toInclude, "|")
+			return &LabelValueInfo{val, labels.MatchRegexp}, nil
 		}
 	}
-	return true, splitQueryLabels
-}
 
-func createEnforcer(observedTenantLabelValues []string, tenantLabelName string) *enforcer.PromQLEnforcer {
-	var matchType labels.MatchType
-	if len(observedTenantLabelValues) > 1 {
-		matchType = labels.MatchRegexp
-	} else {
-		matchType = labels.MatchEqual
-	}
-
-	return enforcer.NewPromQLEnforcer(true, &labels.Matcher{
-		Name:  tenantLabelName,
-		Type:  matchType,
-		Value: strings.Join(observedTenantLabelValues, "|"),
-	})
+	// zero matches requires matching the empty string (NOTE: this behavior may not be appropriate for all uses)
+	return &LabelValueInfo{"", labels.MatchEqual}, nil
 }
