@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/rs/zerolog/log"
-	"golang.org/x/exp/maps"
 
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -93,7 +92,7 @@ func parseJwtToken(tokenString string, a *App) (OAuthToken, *jwt.Token, error) {
 // It checks if the user is an admin and skips label enforcement if true.
 // Returns a map representing valid labels, a boolean indicating whether label enforcement should be skipped,
 // and any error that occurred during validation.
-func validateLabels(token OAuthToken, a *App) (map[string]bool, bool, error) {
+func validateLabels(token OAuthToken, a *App) ([]string, bool, error) {
 	if isAdmin(token, a) {
 		log.Debug().Str("user", token.PreferredUsername).Bool("Admin", true).Msg("Skipping label enforcement")
 		return nil, true, nil
@@ -104,7 +103,7 @@ func validateLabels(token OAuthToken, a *App) (map[string]bool, bool, error) {
 		log.Debug().Str("user", token.PreferredUsername).Bool("Admin", false).Msg("Skipping label enforcement")
 		return nil, true, nil
 	}
-	log.Debug().Str("user", token.PreferredUsername).Strs("labels", maps.Keys(tenantLabels)).Msg("")
+	log.Debug().Str("user", token.PreferredUsername).Strs("labels", tenantLabels).Msg("")
 
 	if len(tenantLabels) < 1 {
 		return nil, false, fmt.Errorf("no tenant labels found") // TODO: can this error be surfaced better in Grafana?

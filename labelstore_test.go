@@ -25,48 +25,32 @@ func TestGetLabelsCM(t *testing.T) {
 		name     string
 		username string
 		groups   []string
-		expected map[string]bool
+		expected []string
 		skip     bool
 	}{
 		{
 			name:     "User with groups",
 			username: "user1",
 			groups:   []string{"group1", "group2"},
-			expected: map[string]bool{
-				"u1": true,
-				"u2": true,
-				"g1": true,
-				"g2": true,
-				"g3": true,
-				"g4": true,
-			},
+			expected: []string{"u1", "u2", "g1", "g2", "g3", "g4"},
 		},
 		{
 			name:     "User without groups",
 			username: "user2",
 			groups:   []string{},
-			expected: map[string]bool{
-				"u3": true,
-				"u4": true,
-			},
+			expected: []string{"u3", "u4"},
 		},
 		{
 			name:     "Non-existent user",
 			username: "user3",
 			groups:   []string{"group1"},
-			expected: map[string]bool{
-				"g1": true,
-				"g2": true,
-			},
+			expected: []string{"g1", "g2"},
 		},
 		{
 			name:     "Non-existent group",
 			username: "user1",
 			groups:   []string{"group3"},
-			expected: map[string]bool{
-				"u1": true,
-				"u2": true,
-			},
+			expected: []string{"u1", "u2"},
 		},
 		{
 			name:     "admin_group",
@@ -81,7 +65,7 @@ func TestGetLabelsCM(t *testing.T) {
 
 		t.Run(tc.name, func(t *testing.T) {
 			labels, skip := cmh.GetLabels(OAuthToken{PreferredUsername: tc.username, Groups: tc.groups})
-			happy := assert.Equal(t, tc.expected, labels)
+			happy := assert.ElementsMatch(t, tc.expected, labels)
 			happy = happy && assert.Equal(t, tc.skip, skip)
 
 			log.Info().Bool("passed", happy).Str("name", tc.name).Msg("Labelstore test")

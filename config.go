@@ -57,23 +57,25 @@ type Config struct {
 	} `mapstructure:"db"`
 
 	Thanos struct {
-		PathPrefix   string            `mapstructure:"path_prefix"`  // the path where this service will be offered
-		URL          string            `mapstructure:"url"`          // the service we proxy traffic to
-		TenantLabel  string            `mapstructure:"tenant_label"` // the label to enforce values of
-		UseMutualTLS bool              `mapstructure:"use_mutual_tls"`
-		Cert         string            `mapstructure:"cert"`
-		Key          string            `mapstructure:"key"`
-		Headers      map[string]string `mapstructure:"headers"`
+		PathPrefix                string            `mapstructure:"path_prefix"`  // the path where this service will be offered
+		URL                       string            `mapstructure:"url"`          // the service we proxy traffic to
+		TenantLabel               string            `mapstructure:"tenant_label"` // the label to enforce values of
+		ErrorOnIllegalTenantValue bool              `mapstructure:"error_on_illegal_tenant_value"`
+		UseMutualTLS              bool              `mapstructure:"use_mutual_tls"`
+		Cert                      string            `mapstructure:"cert"`
+		Key                       string            `mapstructure:"key"`
+		Headers                   map[string]string `mapstructure:"headers"`
 	} `mapstructure:"thanos"`
 
 	Loki struct {
-		PathPrefix   string            `mapstructure:"path_prefix"`  // the path where this service will be offered
-		URL          string            `mapstructure:"url"`          // the service we proxy traffic to
-		TenantLabel  string            `mapstructure:"tenant_label"` // the label to enforce values of
-		UseMutualTLS bool              `mapstructure:"use_mutual_tls"`
-		Cert         string            `mapstructure:"cert"`
-		Key          string            `mapstructure:"key"`
-		Headers      map[string]string `mapstructure:"headers"`
+		PathPrefix                string            `mapstructure:"path_prefix"`  // the path where this service will be offered
+		URL                       string            `mapstructure:"url"`          // the service we proxy traffic to
+		TenantLabel               string            `mapstructure:"tenant_label"` // the label to enforce values of
+		ErrorOnIllegalTenantValue bool              `mapstructure:"error_on_illegal_tenant_value"`
+		UseMutualTLS              bool              `mapstructure:"use_mutual_tls"`
+		Cert                      string            `mapstructure:"cert"`
+		Key                       string            `mapstructure:"key"`
+		Headers                   map[string]string `mapstructure:"headers"`
 	} `mapstructure:"loki"`
 }
 
@@ -81,7 +83,7 @@ func (a *App) WithConfig() *App {
 	v := viper.NewWithOptions(viper.KeyDelimiter("::"))
 	v.SetConfigName("config")
 	v.SetConfigType("yaml")
-	v.AddConfigPath("/etc/config/config/")
+	v.AddConfigPath("/etc/config/config/") // mount ConfigMap here
 	v.AddConfigPath("./configs")
 	err := v.MergeInConfig()
 	if err != nil {

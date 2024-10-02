@@ -25,19 +25,18 @@ type PromQLEnforcer struct{}
 // Enforce enhances a given PromQL query string with additional label matchers,
 // ensuring that the query complies with the allowed tenant labels and specified label match.
 // It returns the enhanced query or an error if the query cannot be parsed or is not compliant.
-func (PromQLEnforcer) Enforce(query string, allowedTenantLabelValues map[string]bool, tenantLabelName string) (string, error) {
+func (PromQLEnforcer) Enforce(query string, allowedTenantLabelValues []string, tenantLabelName string, errorOnIllegalTenantValue bool) (string, error) {
 	log.Trace().Str("function", "enforcer").Str("input query", query).Msg("")
-	allowedTenantLabelValues2 := MapKeysToArray(allowedTenantLabelValues)
 
 	if query == "" {
 		operator := "="
-		if len(allowedTenantLabelValues2) > 1 {
+		if len(allowedTenantLabelValues) > 1 {
 			operator = "=~"
 		}
 		query = fmt.Sprintf("{%s%s\"%s\"}",
 			tenantLabelName,
 			operator,
-			strings.Join(allowedTenantLabelValues2, "|"))
+			strings.Join(allowedTenantLabelValues, "|"))
 		log.Trace().Str("function", "enforcer").Str("default query", query).Msg("")
 	}
 
@@ -53,7 +52,7 @@ func (PromQLEnforcer) Enforce(query string, allowedTenantLabelValues map[string]
 		return "", err
 	}
 
-	processedLabelInfo, err := processLabelValues(extractedLabelInfo, allowedTenantLabelValues2)
+	processedLabelInfo, err := processLabelValues(extractedLabelInfo, allowedTenantLabelValues, errorOnIllegalTenantValue)
 	if err != nil {
 		log.Warn().Msg("Unable to process the label values.")
 		return "", err
@@ -109,26 +108,28 @@ func extractTenantValues(expr parser.Expr, tenantLabelName string) (*LabelValueI
 
 // processLabelValues validates if query labels are present in the allowed tenant labels and returns them.
 // If a query label is not allowed, it returns false and the non-compliant label.
-func processLabelValues(extractedLabelInfo *LabelValueInfo, allowedTenantLabelValues2 []string) (*LabelValueInfo, error) {
+func processLabelValues(extractedLabelInfo *LabelValueInfo, allowedTenantLabelValues []string, errorOnIllegalTenantValue bool) (*LabelValueInfo, error) {
 
 	// when no tenant label has been provided by the client
 	if extractedLabelInfo == nil {
-		if len(allowedTenantLabelValues2) == 1 {
-			return &LabelValueInfo{allowedTenantLabelValues2[0], labels.MatchEqual}, nil
+		if len(allowedTenantLabelValues) == 1 {
+			return &LabelValueInfo{allowedTenantLabelValues[0], labels.MatchEqual}, nil
 		}
-		if len(allowedTenantLabelValues2) == 0 {
+		if len(allowedTenantLabelValues) == 0 {
 			return &LabelValueInfo{"", labels.MatchEqual}, nil
 		}
 
 		// all the allowed values in one regex
-		val := strings.Join(allowedTenantLabelValues2, "|")
+		val := strings.Join(allowedTenantLabelValues, "|")
 		return &LabelValueInfo{val, labels.MatchRegexp}, nil
 	}
 
 	if extractedLabelInfo.Type == labels.MatchEqual {
 		// equal one of the allowed values
-		if slices.Contains(allowedTenantLabelValues2, extractedLabelInfo.Value) {
+		if slices.Contains(allowedTenantLabelValues, extractedLabelInfo.Value) {
 			return extractedLabelInfo, nil
+		} else if errorOnIllegalTenantValue {
+			return nil, errors.New("access not allowed with label value forbidden_tenant")
 		}
 	} else {
 
@@ -136,7 +137,7 @@ func processLabelValues(extractedLabelInfo *LabelValueInfo, allowedTenantLabelVa
 		if extractedLabelInfo.Type == labels.MatchNotEqual {
 
 			// match all of the allowed values except possibly one of them
-			for _, val := range allowedTenantLabelValues2 {
+			for _, val := range allowedTenantLabelValues {
 				if val != extractedLabelInfo.Value {
 					toInclude = append(toInclude, val)
 				}
@@ -160,7 +161,7 @@ func processLabelValues(extractedLabelInfo *LabelValueInfo, allowedTenantLabelVa
 				return nil, errors.New("unsupported operator")
 			}
 
-			for _, val := range allowedTenantLabelValues2 {
+			for _, val := range allowedTenantLabelValues {
 				if rx.MatchString(val) == want {
 					toInclude = append(toInclude, val)
 				}
@@ -178,6 +179,11 @@ func processLabelValues(extractedLabelInfo *LabelValueInfo, allowedTenantLabelVa
 		}
 	}
 
-	// zero matches requires matching the empty string (NOTE: this behavior may not be appropriate for all uses)
+	if errorOnIllegalTenantValue {
+		// FIXME: maybe improve the error message
+		return nil, errors.New("no tenant labels found")
+	}
+
+	// zero matches requires matching the empty string
 	return &LabelValueInfo{"", labels.MatchEqual}, nil
 }

@@ -72,13 +72,15 @@ func (a *App) WithLoki() *App {
 	lokiRouter := a.e.PathPrefix(a.Cfg.Loki.PathPrefix).Subrouter()
 	for _, route := range routes {
 		log.Trace().Any("route", route).Msg("Loki route")
-		lokiRouter.HandleFunc(route.Url, handler(route.MatchWord,
-			LogQLEnforcer(struct{}{}),
-			a.Cfg.Loki.TenantLabel,
-			a.Cfg.Loki.URL,
-			a.Cfg.Loki.UseMutualTLS,
-			a.Cfg.Loki.Headers,
-			a)).Name(route.Url)
+		lokiRouter.HandleFunc(route.Url,
+			handler(route.MatchWord,
+				LogQLEnforcer(struct{}{}),
+				a.Cfg.Loki.TenantLabel,
+				a.Cfg.Loki.ErrorOnIllegalTenantValue,
+				a.Cfg.Loki.URL,
+				a.Cfg.Loki.UseMutualTLS,
+				a.Cfg.Loki.Headers,
+				a)).Name(route.Url)
 	}
 	return a
 }
@@ -109,6 +111,7 @@ func (a *App) WithThanos() *App {
 			handler(route.MatchWord,
 				PromQLEnforcer(struct{}{}),
 				a.Cfg.Thanos.TenantLabel,
+				a.Cfg.Thanos.ErrorOnIllegalTenantValue,
 				a.Cfg.Thanos.URL,
 				a.Cfg.Thanos.UseMutualTLS,
 				a.Cfg.Thanos.Headers,
@@ -135,7 +138,7 @@ func (a *App) WithThanos() *App {
 //
 // Finally, if all checks and possible enforcement pass successfully, the request is
 // streamed to the upstream server.
-func handler(matchWord string, enforcer EnforceQL, tl string, dsURL string, tls bool, headers map[string]string, a *App) func(http.ResponseWriter, *http.Request) {
+func handler(matchWord string, enforcer EnforceQL, tenantLabel string, errorOnIllegalTenantValue bool, dsURL string, tls bool, headers map[string]string, a *App) func(http.ResponseWriter, *http.Request) {
 	upstreamURL, err := url.Parse(dsURL)
 	if err != nil {
 		log.Fatal().Err(err).Str("url", dsURL).Msg("Error parsing URL")
@@ -156,7 +159,7 @@ func handler(matchWord string, enforcer EnforceQL, tl string, dsURL string, tls 
 			return
 		}
 
-		err = enforceRequest(r, enforcer, labels, tl, matchWord)
+		err = enforceRequest(r, enforcer, labels, tenantLabel, errorOnIllegalTenantValue, matchWord)
 		if err != nil {
 			logAndWriteError(w, http.StatusForbidden, err, "")
 			return

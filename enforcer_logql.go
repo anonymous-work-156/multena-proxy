@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/rs/zerolog/log"
@@ -17,14 +18,14 @@ type LogQLEnforcer struct{}
 // If the input query is empty, a new query is constructed to match provided tenant labels.
 // If the input query is non-empty, it is parsed and modified to ensure tenant isolation.
 // Returns the modified query or an error if parsing or modification fails.
-func (LogQLEnforcer) Enforce(query string, tenantLabels map[string]bool, labelMatch string) (string, error) {
+func (LogQLEnforcer) Enforce(query string, allowedTenantLabelValues []string, tenantLabelName string, errorOnIllegalTenantValue bool) (string, error) {
 	log.Trace().Str("function", "enforcer").Str("query", query).Msg("input")
 	if query == "" {
 		operator := "="
-		if len(tenantLabels) > 1 {
+		if len(allowedTenantLabelValues) > 1 {
 			operator = "=~"
 		}
-		query = fmt.Sprintf("{%s%s\"%s\"}", labelMatch, operator, strings.Join(MapKeysToArray(tenantLabels), "|"))
+		query = fmt.Sprintf("{%s%s\"%s\"}", tenantLabelName, operator, strings.Join(allowedTenantLabelValues, "|"))
 		log.Trace().Str("function", "enforcer").Str("query", query).Msg("enforcing")
 		return query, nil
 	}
@@ -40,7 +41,7 @@ func (LogQLEnforcer) Enforce(query string, tenantLabels map[string]bool, labelMa
 	expr.Walk(func(expr interface{}) {
 		switch labelExpression := expr.(type) {
 		case *logqlv2.StreamMatcherExpr:
-			matchers, err := matchNamespaceMatchers(labelExpression.Matchers(), tenantLabels, labelMatch)
+			matchers, err := matchNamespaceMatchers(labelExpression.Matchers(), allowedTenantLabelValues, tenantLabelName)
 			if err != nil {
 				errMsg = err
 				return
@@ -61,15 +62,14 @@ func (LogQLEnforcer) Enforce(query string, tenantLabels map[string]bool, labelMa
 // It verifies that the tenant label exists in the query matchers, validating or modifying its values based on tenantLabels.
 // If the tenant label is absent in the matchers, it's added along with all values from tenantLabels.
 // Returns an error for an unauthorized namespace and nil on success.
-func matchNamespaceMatchers(queryMatches []*labels.Matcher, tenantLabels map[string]bool, labelMatch string) ([]*labels.Matcher, error) {
+func matchNamespaceMatchers(queryMatches []*labels.Matcher, allowedTenantLabelValues []string, tenantLabelName string) ([]*labels.Matcher, error) {
 	foundNamespace := false
 	for _, match := range queryMatches {
-		if match.Name == labelMatch {
+		if match.Name == tenantLabelName {
 			foundNamespace = true
 			queryLabels := strings.Split(match.Value, "|")
 			for _, queryLabel := range queryLabels {
-				_, ok := tenantLabels[queryLabel]
-				if !ok {
+				if !slices.Contains(allowedTenantLabelValues, queryLabel) {
 					return nil, fmt.Errorf("unauthorized namespace %s", queryLabel)
 				}
 			}
@@ -77,14 +77,14 @@ func matchNamespaceMatchers(queryMatches []*labels.Matcher, tenantLabels map[str
 	}
 	if !foundNamespace {
 		matchType := labels.MatchEqual
-		if len(tenantLabels) > 1 {
+		if len(allowedTenantLabelValues) > 1 {
 			matchType = labels.MatchRegexp
 		}
 
 		queryMatches = append(queryMatches, &labels.Matcher{
 			Type:  matchType,
-			Name:  labelMatch,
-			Value: strings.Join(MapKeysToArray(tenantLabels), "|"),
+			Name:  tenantLabelName,
+			Value: strings.Join(allowedTenantLabelValues, "|"),
 		})
 	}
 	return queryMatches, nil

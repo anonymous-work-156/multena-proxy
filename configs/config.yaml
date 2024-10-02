@@ -35,6 +35,7 @@ thanos:
   path_prefix: ""
   url: https://localhost:9091 # url to thanos querier
   tenant_label: namespace # label to use for tenant
+  error_on_illegal_tenant_value: true
   cert: "./certs/thanos/tls.crt" # path to thanos mtls cert
   key: "./certs/thanos/tls.key" # path to thanos mtls key
   headers:
@@ -45,6 +46,7 @@ loki:
   path_prefix: "/loki"
   url: https://localhost:3100 # url to loki querier
   tenant_label: kubernetes_namespace_name # label to use for tenant
+  error_on_illegal_tenant_value: true
   cert: "./certs/loki/tls.crt" # path to loki mtls cert
   key: "./certs/loki/tls.key" # path to loki mtls key
   headers:
