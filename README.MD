@@ -21,9 +21,9 @@ Our changes (at the time of this writing) are basically:
 1.  Configure the HTTP header in which the JWT arrives
 2.  Allow the HTTP header value to not start with "BEARER"
 3.  Configure the sub-paths at which Loki and Promethues are proxied
-4.  Support the four operators `==`, `!=`, `=~` and `!~` for tenant labels *(currently for the metrics proxy)*
-5.  Support arbitrary regex syntax for tenant label values *(currently for the metrics proxy)*
-6.  Configure the behavior when an illegal or non-matching tenant label value is specified (error vs match empty string) *(currently for the metrics proxy)*
+4.  Support the four operators `==`, `!=`, `=~` and `!~` for tenant labels
+5.  Support arbitrary regex syntax for tenant label values
+6.  Configure the behavior when an illegal or non-matching tenant label value is specified (error vs match empty string)
 7.  Extended test cases
 8.  Rename some variables
 9.  Rephrase some error messages

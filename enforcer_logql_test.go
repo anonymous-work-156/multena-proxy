@@ -1,40 +1,134 @@
 package main
 
 import (
+	"slices"
 	"testing"
 
-	"github.com/prometheus/prometheus/model/labels"
 	"github.com/rs/zerolog/log"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestLogqlEnforcer(t *testing.T) {
+	type args struct {
+		query                     string
+		allowedTenantLabelValues  []string
+		errorOnIllegalTenantValue bool
+	}
+
 	tests := []struct {
-		name           string
-		query          string
-		tenantLabels   []string
-		expectedResult string
-		expectErr      bool
+		name    string
+		args    args
+		want    []string
+		wantErr bool
 	}{
 		{
-			name:           "Valid query and tenant labels",
-			query:          "{kubernetes_namespace_name=\"test\"}",
-			tenantLabels:   []string{"test"},
-			expectedResult: "{kubernetes_namespace_name=\"test\"}",
-			expectErr:      false,
+			name: "valid query and tenant labels",
+			args: args{
+				query:                     "{kubernetes_namespace_name=\"test\"}",
+				allowedTenantLabelValues:  []string{"test"},
+				errorOnIllegalTenantValue: true,
+			},
+			want:    []string{"{kubernetes_namespace_name=\"test\"}"},
+			wantErr: false,
 		},
 		{
-			name:           "Empty query and valid tenant labels",
-			query:          "",
-			tenantLabels:   []string{"test"},
-			expectedResult: "{kubernetes_namespace_name=\"test\"}",
-			expectErr:      false,
+			name: "valid query and tenant labels, multi allowed",
+			args: args{
+				query:                     "{kubernetes_namespace_name=\"test\"}",
+				allowedTenantLabelValues:  []string{"test", "test2", "test3"},
+				errorOnIllegalTenantValue: true,
+			},
+			want:    []string{"{kubernetes_namespace_name=\"test\"}"},
+			wantErr: false,
 		},
 		{
-			name:         "Valid query and invalid tenant labels",
-			query:        "{kubernetes_namespace_name=\"test\"}",
-			tenantLabels: []string{"invalid"},
-			expectErr:    true,
+			name: "valid query and tenant labels, not equal, multi allowed",
+			args: args{
+				query:                     "{kubernetes_namespace_name!=\"test\"}",
+				allowedTenantLabelValues:  []string{"test", "test2", "test3"},
+				errorOnIllegalTenantValue: true,
+			},
+			want:    []string{"{kubernetes_namespace_name=~\"test2|test3\"}", "{kubernetes_namespace_name=~\"test3|test2\"}"},
+			wantErr: false,
+		},
+		{
+			name: "valid query and tenant labels, multi regex, multi allowed",
+			args: args{
+				query:                     "{kubernetes_namespace_name=~\"test.+\"}",
+				allowedTenantLabelValues:  []string{"test", "test2", "test3"},
+				errorOnIllegalTenantValue: true,
+			},
+			want:    []string{"{kubernetes_namespace_name=~\"test2|test3\"}", "{kubernetes_namespace_name=~\"test3|test2\"}"},
+			wantErr: false,
+		},
+		{
+			name: "empty query and valid tenant labels",
+			args: args{
+				query:                     "",
+				allowedTenantLabelValues:  []string{"test"},
+				errorOnIllegalTenantValue: true,
+			},
+			want:    []string{"{kubernetes_namespace_name=\"test\"}"},
+			wantErr: false,
+		},
+		{
+			name: "valid query and invalid tenant labels, no error",
+			args: args{
+				query:                     "{kubernetes_namespace_name=\"invalid\"}",
+				allowedTenantLabelValues:  []string{"test"},
+				errorOnIllegalTenantValue: false,
+			},
+			want:    []string{"{kubernetes_namespace_name=\"\"}"},
+			wantErr: false,
+		},
+		{
+			name: "valid query and invalid tenant labels, want error",
+			args: args{
+				query:                     "{kubernetes_namespace_name=\"invalid\"}",
+				allowedTenantLabelValues:  []string{"test"},
+				errorOnIllegalTenantValue: true,
+			},
+			want:    []string{""},
+			wantErr: true,
+		},
+		{
+			name: "valid query and invalid tenant labels, not equal, want error",
+			args: args{
+				query:                     "{kubernetes_namespace_name!=\"test\"}",
+				allowedTenantLabelValues:  []string{"test"},
+				errorOnIllegalTenantValue: true,
+			},
+			want:    []string{""},
+			wantErr: true,
+		},
+		{
+			name: "valid query and invalid tenant labels, regex, want error",
+			args: args{
+				query:                     "{kubernetes_namespace_name=~\"bad.*\"}",
+				allowedTenantLabelValues:  []string{"test"},
+				errorOnIllegalTenantValue: true,
+			},
+			want:    []string{""},
+			wantErr: true,
+		},
+		{
+			name: "conflicting tenant labels, part 1",
+			args: args{
+				query:                     "{kubernetes_namespace_name=\"test1\", kubernetes_namespace_name!=\"test1\"}",
+				allowedTenantLabelValues:  []string{"test1", "test2"},
+				errorOnIllegalTenantValue: false,
+			},
+			want:    []string{""},
+			wantErr: true,
+		},
+		{
+			name: "conflicting tenant labels, part 2",
+			args: args{
+				query:                     "{kubernetes_namespace_name=\"test1\", kubernetes_namespace_name=\"test2\"}",
+				allowedTenantLabelValues:  []string{"test1", "test2"},
+				errorOnIllegalTenantValue: false,
+			},
+			want:    []string{""},
+			wantErr: true,
 		},
 	}
 
@@ -42,59 +136,13 @@ func TestLogqlEnforcer(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			log.Debug().Str("name", tt.name).Msg("LogQL enforcer test")
-			result, err := enforcer.Enforce(tt.query, tt.tenantLabels, "kubernetes_namespace_name", false)
-			if tt.expectErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expectedResult, result)
+			log.Info().Str("name", tt.name).Msg("LogQL enforcer test")
+			got, err := enforcer.Enforce(tt.args.query, tt.args.allowedTenantLabelValues, "kubernetes_namespace_name", tt.args.errorOnIllegalTenantValue)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("logqlEnforcer() error = %v, wantErr = %v", err, tt.wantErr)
 			}
-		})
-	}
-}
-
-func TestMatchNamespaceMatchers(t *testing.T) {
-	tests := []struct {
-		name         string
-		matchers     []*labels.Matcher
-		tenantLabels []string
-		expectErr    bool
-	}{
-		{
-			name: "Valid matchers and tenant labels",
-			matchers: []*labels.Matcher{
-				{
-					Type:  labels.MatchEqual,
-					Name:  "kubernetes_namespace_name",
-					Value: "test",
-				},
-			},
-			tenantLabels: []string{"test"},
-			expectErr:    false,
-		},
-		{
-			name: "Invalid matchers and valid tenant labels",
-			matchers: []*labels.Matcher{
-				{
-					Type:  labels.MatchEqual,
-					Name:  "kubernetes_namespace_name",
-					Value: "invalid",
-				},
-			},
-			tenantLabels: []string{"test"},
-			expectErr:    true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			log.Debug().Str("name", tt.name).Msg("LogQL enforcer test")
-			_, err := matchNamespaceMatchers(tt.matchers, tt.tenantLabels, "kubernetes_namespace_name")
-			if tt.expectErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
+			if !slices.Contains(tt.want, got) {
+				t.Errorf("logqlEnforcer() = %v, want = %v", got, tt.want[0])
 			}
 		})
 	}
