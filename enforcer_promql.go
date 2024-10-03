@@ -75,8 +75,8 @@ func (PromQLEnforcer) Enforce(query string, allowedTenantLabelValues []string, t
 }
 
 // extractTenantValues parses a PromQL expression and extracts labels and their values.
-// It returns a map where keys are label names and values are corresponding label values.
-// An error is returned if the expression cannot be parsed, or if the tenant label appears with a different operator, or with a different value.
+// It returns a struct containing the operator and tenant label value which were found.
+// An error is returned if the expression cannot be parsed, or if conflicting operator and/or values are found for the tenant label.
 func extractTenantValues(expr parser.Expr, tenantLabelName string) (*LabelValueInfo, error) {
 	var info map[LabelValueInfo]bool = make(map[LabelValueInfo]bool)
 	parser.Inspect(expr, func(node parser.Node, path []parser.Node) error {
@@ -106,8 +106,9 @@ func extractTenantValues(expr parser.Expr, tenantLabelName string) (*LabelValueI
 	return nil, nil
 }
 
-// processLabelValues validates if query labels are present in the allowed tenant labels and returns them.
-// If a query label is not allowed, it returns false and the non-compliant label.
+// processLabelValues takes the tenant label operator and value that were found (if any) and creates a new operator and tenant label value from them.
+// The new operator and value may be the same, or they may reflect simplifications from evaluating the operator and value in context of the allowed values.
+// An error can be returned (depending on errorOnIllegalTenantValue) if the tenant label value is illegal or matches nothing.
 func processLabelValues(extractedLabelInfo *LabelValueInfo, allowedTenantLabelValues []string, errorOnIllegalTenantValue bool) (*LabelValueInfo, error) {
 
 	// when no tenant label has been provided by the client
