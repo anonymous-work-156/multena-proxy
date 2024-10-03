@@ -14,6 +14,10 @@ type LabelValueInfo struct {
 	Type  labels.MatchType
 }
 
+func (c LabelValueInfo) String() string {
+	return fmt.Sprintf("LabelValueInfo(%v %v)", c.Type, c.Value)
+}
+
 // processLabelValues takes the tenant label operator and value that were found (if any) and creates a new operator and tenant label value from them.
 // The new operator and value may be the same, or they may reflect simplifications from evaluating the operator and value in context of the allowed values.
 // An error can be returned (depending on errorOnIllegalTenantValue) if the tenant label value is illegal or matches nothing.
