@@ -97,7 +97,7 @@ func Test_promqlEnforcer(t *testing.T) {
 				tenantLabels: []string{"namespace25", "namespace23"},
 			},
 			want:    []string{"up{namespace=~\"namespace.*\",namespace=~\"namespace23|namespace25\"}", "up{namespace=~\"namespace.*\",namespace=~\"namespace25|namespace23\"}"},
-			wantErr: false, // NOTE: this 'want' above includes the now-redundant input regex due to the implementation of PromQLEnforcer
+			wantErr: false, // NOTE: this 'want' above includes the now-redundant input =~ op due to the implementation of PromQLEnforcer
 		},
 		{
 			name: "2 of 2, forbidden",
@@ -151,7 +151,7 @@ func Test_promqlEnforcer(t *testing.T) {
 				tenantLabels: []string{"namespace1", "namespace2", "namespace3"},
 			},
 			want:    []string{"up{namespace!=\"namespace2\",namespace=~\"namespace1|namespace3\"}", "up{namespace!=\"namespace2\",namespace=~\"namespace3|namespace1\"}"},
-			wantErr: false, // NOTE: this 'want' above includes the now-redundant input regex due to the implementation of PromQLEnforcer
+			wantErr: false, // NOTE: this 'want' above includes the now-redundant input != op due to the implementation of PromQLEnforcer
 		},
 		{
 			name: "2 of 3, with not regex",
@@ -160,7 +160,7 @@ func Test_promqlEnforcer(t *testing.T) {
 				tenantLabels: []string{"namespace1", "namespace2", "namespace3"},
 			},
 			want:    []string{"up{namespace!~\".*2\",namespace=~\"namespace1|namespace3\"}", "up{namespace!~\".*2\",namespace=~\"namespace3|namespace1\"}"},
-			wantErr: false, // NOTE: this 'want' above includes the now-redundant input regex due to the implementation of PromQLEnforcer
+			wantErr: false, // NOTE: this 'want' above includes the now-redundant input !~ op due to the implementation of PromQLEnforcer
 		},
 		{
 			name: "2 of 3, with not regex 2",
@@ -169,7 +169,7 @@ func Test_promqlEnforcer(t *testing.T) {
 				tenantLabels: []string{"namespace1", "namespace2", "namespace3"},
 			},
 			want:    []string{"up{namespace!~\"namespace3\",namespace=~\"namespace1|namespace2\"}", "up{namespace!~\"namespace3\",namespace=~\"namespace2|namespace1\"}"},
-			wantErr: false, // NOTE: this 'want' above includes the now-redundant input regex due to the implementation of PromQLEnforcer
+			wantErr: false, // NOTE: this 'want' above includes the now-redundant input !~ op due to the implementation of PromQLEnforcer
 		},
 	}
 	for _, tt := range tests {
