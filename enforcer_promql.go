@@ -129,7 +129,7 @@ func processLabelValues(extractedLabelInfo *LabelValueInfo, allowedTenantLabelVa
 		if slices.Contains(allowedTenantLabelValues, extractedLabelInfo.Value) {
 			return extractedLabelInfo, nil
 		} else if errorOnIllegalTenantValue {
-			return nil, errors.New("access not allowed with label value forbidden_tenant")
+			return nil, fmt.Errorf("unauthorized tenant label value %s", extractedLabelInfo.Value)
 		}
 	} else {
 

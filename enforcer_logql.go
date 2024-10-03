@@ -70,7 +70,7 @@ func matchNamespaceMatchers(queryMatches []*labels.Matcher, allowedTenantLabelVa
 			queryLabels := strings.Split(match.Value, "|")
 			for _, queryLabel := range queryLabels {
 				if !slices.Contains(allowedTenantLabelValues, queryLabel) {
-					return nil, fmt.Errorf("unauthorized namespace %s", queryLabel)
+					return nil, fmt.Errorf("unauthorized tenant label value %s", queryLabel)
 				}
 			}
 		}
