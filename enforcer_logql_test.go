@@ -130,6 +130,26 @@ func TestLogqlEnforcer(t *testing.T) {
 			want:    []string{""},
 			wantErr: true,
 		},
+		{
+			name: "elaborate query 1",
+			args: args{
+				query:                     "count_over_time({job=\"mysql\"}[5m])",
+				allowedTenantLabelValues:  []string{"test"},
+				errorOnIllegalTenantValue: true,
+			},
+			want:    []string{"count_over_time({job=\"mysql\", kubernetes_namespace_name=\"test\"}[5m])"},
+			wantErr: false,
+		},
+		/*{
+			name: "elaborate query 2",
+			args: args{
+				query:                     "sum by (host) (rate({job=\"mysql\"} |= \"error\" != \"timeout\" | json | duration > 10s [1m]))",
+				allowedTenantLabelValues:  []string{"test"},
+				errorOnIllegalTenantValue: true,
+			},
+			want:    []string{"sum by (host) (rate({job=\"mysql\", kubernetes_namespace_name=\"test\"} |= \"error\" != \"timeout\" | json | duration > 10s [1m]))"},
+			wantErr: false,
+		},*/
 	}
 
 	enforcer := LogQLEnforcer{}
