@@ -43,11 +43,11 @@ func TestLogqlEnforcer(t *testing.T) {
 		{
 			name: "valid query and tenant labels, not equal, multi allowed",
 			args: args{
-				query:                     "{kubernetes_namespace_name!=\"test\"}",
+				query:                     `{other_label="foo",kubernetes_namespace_name!="test"}`,
 				allowedTenantLabelValues:  []string{"test", "test2", "test3"},
 				errorOnIllegalTenantValue: true,
 			},
-			want:    []string{"{kubernetes_namespace_name=~\"test2|test3\"}", "{kubernetes_namespace_name=~\"test3|test2\"}"},
+			want:    []string{`{other_label="foo", kubernetes_namespace_name=~"test2|test3"}`, `{other_label="foo", kubernetes_namespace_name=~"test3|test2"}`},
 			wantErr: false,
 		},
 		{
@@ -143,21 +143,21 @@ func TestLogqlEnforcer(t *testing.T) {
 		{
 			name: "elaborate query 2",
 			args: args{
-				query:                     `sum by (host) (rate({job="mysql"} |= "error" != "timeout" | json | duration > 10s [1m]))`,
+				query:                     `sum by (host)(rate({job="mysql"} |= "error" != "timeout" | json | duration>10s[1m]))`,
 				allowedTenantLabelValues:  []string{"test"},
 				errorOnIllegalTenantValue: true,
 			},
-			want:    []string{`sum by (host) (rate({job="mysql", kubernetes_namespace_name="test"} |= "error" != "timeout" | json | duration > 10s [1m]))`},
+			want:    []string{`sum by (host)(rate({job="mysql", kubernetes_namespace_name="test"} |= "error" != "timeout" | json | duration>10s[1m]))`},
 			wantErr: false,
 		},
 		{
 			name: "elaborate query 3",
 			args: args{
-				query:                     `(sum by(cluster)(rate({job="foo"} |= "bar" | logfmt | bazz="buzz"[5m])) / sum by(cluster)(rate({job="foo"} |= "bar" | logfmt | bazz="buzz"[5m])))`,
+				query:                     `(sum by (cluster)(rate({job="foo"} |= "bar" | logfmt | bazz="buzz"[5m])) / sum by (cluster)(rate({job="foo"} |= "bar" | logfmt | bazz="buzz"[5m])))`,
 				allowedTenantLabelValues:  []string{"test"},
 				errorOnIllegalTenantValue: true,
 			},
-			want:    []string{"sum by (host) (rate({job=\"mysql\", kubernetes_namespace_name=\"test\"} |= \"error\" != \"timeout\" | json | duration > 10s [1m]))"},
+			want:    []string{`(sum by (cluster)(rate({job="foo", kubernetes_namespace_name="test"} |= "bar" | logfmt | bazz="buzz"[5m])) / sum by (cluster)(rate({job="foo", kubernetes_namespace_name="test"} |= "bar" | logfmt | bazz="buzz"[5m])))`},
 			wantErr: false,
 		},
 	}

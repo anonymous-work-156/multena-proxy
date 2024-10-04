@@ -8,10 +8,10 @@ require (
 	github.com/go-sql-driver/mysql v1.8.0
 	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/gorilla/mux v1.8.1
-	github.com/grafana/loki/v3 v3.1.1
+	github.com/grafana/loki/v3 v3.0.1
 	github.com/prometheus-community/prom-label-proxy v0.11.0
 	github.com/prometheus/client_golang v1.20.2
-	github.com/prometheus/prometheus v0.53.2-0.20240726125539-d4f098ae80fb
+	github.com/prometheus/prometheus v0.53.1
 	github.com/rs/zerolog v1.32.0
 	github.com/slok/go-http-metrics v0.11.0
 	github.com/spf13/viper v1.18.2
@@ -69,7 +69,7 @@ require (
 	github.com/grafana/gomemcache v0.0.0-20240229205252-cd6a66d6fb56 // indirect
 	github.com/grafana/jsonparser v0.0.0-20240209175146-098958973a2d // indirect
 	github.com/grafana/loki/pkg/push v0.0.0-20231124142027-e52380921608 // indirect
-	github.com/grafana/pyroscope-go/godeltaprof v0.1.6 // indirect
+	github.com/grafana/pyroscope-go/godeltaprof v0.1.8 // indirect
 	github.com/grafana/regexp v0.0.0-20240518133315-a468a5bfb3bc // indirect
 	github.com/hashicorp/consul/api v1.29.2 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
@@ -89,7 +89,7 @@ require (
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/jpillora/backoff v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/klauspost/compress v1.17.9 // indirect
+	github.com/klauspost/compress v1.17.10 // indirect
 	github.com/magiconair/properties v1.8.7 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
