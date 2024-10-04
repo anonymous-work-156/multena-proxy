@@ -6,10 +6,9 @@ import (
 	"maps"
 	"strings"
 
-	"github.com/rs/zerolog/log"
-
-	logqlv2 "github.com/observatorium/api/logql/v2"
+	logqlv3 "github.com/grafana/loki/v3/pkg/logql/syntax"
 	"github.com/prometheus/prometheus/model/labels"
+	"github.com/rs/zerolog/log"
 )
 
 // LogQLEnforcer manipulates and enforces tenant isolation on LogQL queries.
@@ -34,7 +33,7 @@ func (LogQLEnforcer) Enforce(query string, allowedTenantLabelValues []string, te
 		log.Trace().Str("function", "enforcer").Str("default query", query).Msg("")
 	}
 
-	expr, err := logqlv2.ParseExpr(query)
+	expr, err := logqlv3.ParseExpr(query)
 	if err != nil {
 		return "", err
 	}
@@ -61,23 +60,23 @@ func (LogQLEnforcer) Enforce(query string, allowedTenantLabelValues []string, te
 // Returns a struct containing the operator and tenant label value which were found.
 // An error is returned if conflicting operator and/or values are found for the tenant label.
 // NOTE: It is crude to insist that only one distinct operator and value are associated with the tenant label; it forbids some valid queries.
-func extractLokiTenantValues(expr logqlv2.Expr, tenantLabelName string) (*LabelValueInfo, error) {
+func extractLokiTenantValues(expr logqlv3.Expr, tenantLabelName string) (*LabelValueInfo, error) {
 	var info map[LabelValueInfo]bool = make(map[LabelValueInfo]bool)
-	expr.Walk(func(expr interface{}) {
-		switch labelExpression := expr.(type) {
-		case *logqlv2.StreamMatcherExpr:
-			for _, matcher := range labelExpression.Matchers() {
-				if matcher.Name != tenantLabelName {
-					continue
-				}
-				thisinfo := LabelValueInfo{matcher.Value, matcher.Type}
-				_, ok := info[thisinfo]
-				if !ok {
-					info[thisinfo] = true
-				}
+	expr.Walk(func(expr2 logqlv3.Expr) {
+		matcherExpr, ok := expr2.(*logqlv3.MatchersExpr)
+		if !ok {
+			return // we are only looking for MatchersExpr
+		}
+
+		for _, matcher := range matcherExpr.Matchers() {
+			if matcher.Name != tenantLabelName {
+				continue
 			}
-		default:
-			// Do nothing
+			thisinfo := LabelValueInfo{matcher.Value, matcher.Type}
+			_, ok := info[thisinfo]
+			if !ok {
+				info[thisinfo] = true
+			}
 		}
 	})
 	if len(info) == 1 {
@@ -94,26 +93,35 @@ func extractLokiTenantValues(expr logqlv2.Expr, tenantLabelName string) (*LabelV
 
 // setLokiTenantValues ensures tenant label matchers in a LogQL query adhere to provided tenant labels.
 // It verifies that the tenant label exists in the query matchers, validating or modifying its values based on tenantLabels.
-func setLokiTenantValues(expr logqlv2.Expr, tenantLabelName string, processedLabelInfo *LabelValueInfo) {
-	expr.Walk(func(expr interface{}) {
-		switch labelExpression := expr.(type) {
-		case *logqlv2.StreamMatcherExpr:
-			matchers := make([]*labels.Matcher, 0)
-			for _, matcher := range labelExpression.Matchers() {
-				if matcher.Name != tenantLabelName {
-					matchers = append(matchers, matcher)
-				}
-			}
+func setLokiTenantValues(expr logqlv3.Expr, tenantLabelName string, processedLabelInfo *LabelValueInfo) {
+	expr.Walk(func(expr2 logqlv3.Expr) {
+		matcherExpr, ok := expr2.(*logqlv3.MatchersExpr)
+		if !ok {
+			return // we are only looking for MatchersExpr
+		}
 
-			matchers = append(matchers, &labels.Matcher{
+		newmatcher := &labels.Matcher{
+			Type:  processedLabelInfo.Type,
+			Name:  tenantLabelName,
+			Value: processedLabelInfo.Value,
+		}
+
+		found := false
+		matchers := matcherExpr.Matchers()
+		for idx, matcher := range matchers {
+			if matcher.Name == tenantLabelName {
+				matchers[idx] = newmatcher
+				found = true
+			}
+		}
+
+		if !found {
+			appendme := []*labels.Matcher{&labels.Matcher{
 				Type:  processedLabelInfo.Type,
 				Name:  tenantLabelName,
 				Value: processedLabelInfo.Value,
-			})
-
-			labelExpression.SetMatchers(matchers)
-		default:
-			// Do nothing
+			}}
+			matcherExpr.AppendMatchers(appendme)
 		}
 	})
 }

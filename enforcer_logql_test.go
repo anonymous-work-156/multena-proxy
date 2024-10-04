@@ -133,23 +133,33 @@ func TestLogqlEnforcer(t *testing.T) {
 		{
 			name: "elaborate query 1",
 			args: args{
-				query:                     "count_over_time({job=\"mysql\"}[5m])",
+				query:                     `count_over_time({job="mysql"}[5m])`,
 				allowedTenantLabelValues:  []string{"test"},
 				errorOnIllegalTenantValue: true,
 			},
-			want:    []string{"count_over_time({job=\"mysql\", kubernetes_namespace_name=\"test\"}[5m])"},
+			want:    []string{`count_over_time({job="mysql", kubernetes_namespace_name="test"}[5m])`},
 			wantErr: false,
 		},
-		/*{
+		{
 			name: "elaborate query 2",
 			args: args{
-				query:                     "sum by (host) (rate({job=\"mysql\"} |= \"error\" != \"timeout\" | json | duration > 10s [1m]))",
+				query:                     `sum by (host) (rate({job="mysql"} |= "error" != "timeout" | json | duration > 10s [1m]))`,
+				allowedTenantLabelValues:  []string{"test"},
+				errorOnIllegalTenantValue: true,
+			},
+			want:    []string{`sum by (host) (rate({job="mysql", kubernetes_namespace_name="test"} |= "error" != "timeout" | json | duration > 10s [1m]))`},
+			wantErr: false,
+		},
+		{
+			name: "elaborate query 3",
+			args: args{
+				query:                     `(sum by(cluster)(rate({job="foo"} |= "bar" | logfmt | bazz="buzz"[5m])) / sum by(cluster)(rate({job="foo"} |= "bar" | logfmt | bazz="buzz"[5m])))`,
 				allowedTenantLabelValues:  []string{"test"},
 				errorOnIllegalTenantValue: true,
 			},
 			want:    []string{"sum by (host) (rate({job=\"mysql\", kubernetes_namespace_name=\"test\"} |= \"error\" != \"timeout\" | json | duration > 10s [1m]))"},
 			wantErr: false,
-		},*/
+		},
 	}
 
 	enforcer := LogQLEnforcer{}
