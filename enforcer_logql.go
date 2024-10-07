@@ -55,7 +55,7 @@ func (LogQLEnforcer) Enforce(query string, allowedTenantLabelValues []string, te
 	return expr.String(), nil
 }
 
-// extractLokiTenantValues parses a PromQL expression and extracts labels and their values.
+// extractLokiTenantValues parses a LogQL expression and extracts labels and their values.
 // Returns a struct containing the operator and tenant label value which were found.
 // An error is returned if conflicting operator and/or values are found for the tenant label.
 // NOTE: It is crude to insist that only one distinct operator and value are associated with the tenant label; it forbids some valid queries.

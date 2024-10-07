@@ -105,7 +105,7 @@ func validateLabels(token OAuthToken, a *App) ([]string, bool, error) {
 	log.Debug().Str("user", token.PreferredUsername).Strs("labels", tenantLabels).Msg("")
 
 	if len(tenantLabels) < 1 {
-		return nil, false, fmt.Errorf("no tenant labels found") // TODO: can this error be surfaced better in Grafana?
+		return nil, false, fmt.Errorf("no tenant labels are configured for the user")
 	}
 	return tenantLabels, false, nil
 }
