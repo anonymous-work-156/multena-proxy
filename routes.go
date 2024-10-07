@@ -169,8 +169,8 @@ func handler(matchWord string, enforcer EnforceQL, tenantLabel string, errorOnIl
 	}
 }
 
-// streamUp forwards the provided HTTP request to the specified upstream URL using
-// a reverse proxy.It serves the upstream content back to the original client.
+// streamUp forwards the provided HTTP request to the specified upstream URL using a reverse proxy.
+// It serves the upstream content back to the original client.
 func streamUp(w http.ResponseWriter, r *http.Request, upstreamURL *url.URL, tls bool, headers map[string]string, a *App) {
 	setHeaders(r, tls, headers, a.ServiceAccountToken)
 	proxy := httputil.NewSingleHostReverseProxy(upstreamURL)

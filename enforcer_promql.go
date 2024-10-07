@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"maps"
 	"strings"
@@ -96,7 +95,7 @@ func extractPromTenantValues(expr parser.Expr, tenantLabelName string) (*LabelVa
 		}
 	}
 	if len(info) > 1 {
-		return nil, errors.New("found conflicting values or operators for tenant label")
+		return nil, fmt.Errorf("found conflicting values or operators for tenant label")
 	}
 	return nil, nil
 }

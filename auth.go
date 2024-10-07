@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -42,12 +41,12 @@ func getToken(r *http.Request, a *App) (OAuthToken, error) {
 func trimBearerToken(r *http.Request, header_name string) (string, error) {
 	authToken := r.Header.Get(header_name)
 	if authToken == "" {
-		return "", errors.New("got no value for the HTTP header which is expected to contain the JWT")
+		return "", fmt.Errorf("got no value for the HTTP header which is expected to contain the JWT")
 	}
 	if header_name == "Authorization" {
 		splitToken := strings.Split(authToken, "Bearer")
 		if len(splitToken) != 2 {
-			return "", errors.New("failed to remove the bearer prefix from the JWT")
+			return "", fmt.Errorf("failed to remove the bearer prefix from the JWT")
 		}
 		return strings.TrimSpace(splitToken[1]), nil
 	}

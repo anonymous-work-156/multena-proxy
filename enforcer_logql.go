@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"maps"
 	"strings"
@@ -86,7 +85,7 @@ func extractLokiTenantValues(expr logqlv3.Expr, tenantLabelName string) (*LabelV
 		}
 	}
 	if len(info) > 1 {
-		return nil, errors.New("found conflicting values or operators for tenant label")
+		return nil, fmt.Errorf("found conflicting values or operators for tenant label")
 	}
 	return nil, nil
 }
