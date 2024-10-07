@@ -147,6 +147,7 @@ func handler(matchWord string, enforcer EnforceQL, tenantLabel string, errorOnIl
 		oauthToken, err := getToken(r, a)
 		if err != nil {
 			logAndWriteError(w, http.StatusForbidden, err, "")
+			return
 		}
 
 		labels, skip, err := validateLabels(oauthToken, a)

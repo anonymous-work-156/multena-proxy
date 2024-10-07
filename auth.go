@@ -84,7 +84,7 @@ func parseJwtToken(tokenString string, a *App) (OAuthToken, *jwt.Token, error) {
 	} else {
 		log.Warn().Msg("Failed to find value for group in token")
 	}
-	return oAuthToken, token, err
+	return oAuthToken, token, nil
 }
 
 // validateLabels validates the labels in the OAuth token.
