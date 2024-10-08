@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -71,7 +70,7 @@ func processLabelValues(extractedLabelInfo *LabelValueInfo, allowedTenantLabelVa
 				want = false
 			} else {
 				// FIXME: this is probably not the proper way to handle the situation
-				return nil, errors.New("unsupported operator")
+				return nil, fmt.Errorf("unsupported operator")
 			}
 
 			for _, val := range allowedTenantLabelValues {
@@ -93,8 +92,7 @@ func processLabelValues(extractedLabelInfo *LabelValueInfo, allowedTenantLabelVa
 	}
 
 	if errorOnIllegalTenantValue {
-		// FIXME: maybe improve the error message
-		return nil, errors.New("no tenant labels found")
+		return nil, fmt.Errorf("no tenant label values matched")
 	}
 
 	// zero matches requires matching the empty string
