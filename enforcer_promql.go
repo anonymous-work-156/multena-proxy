@@ -12,6 +12,18 @@ import (
 	"github.com/prometheus/prometheus/promql/parser"
 )
 
+type PromQLError struct {
+	// we will be wrapping error messages so that we can express them in JSON format
+	Err error
+}
+
+func (e *PromQLError) Error() string {
+	// other errorType values defined by Prometheus include "internal" and "not_acceptable"
+	return fmt.Sprintf(`{"status":"error","errorType":"bad_data","error": "%v"}`, e.Err)
+}
+
+func (e *PromQLError) Unwrap() error { return e.Err }
+
 // PromQLEnforcer is a struct with methods to enforce specific rules on Prometheus Query Language (PromQL) queries.
 type PromQLEnforcer struct{}
 
@@ -36,19 +48,19 @@ func (PromQLEnforcer) Enforce(query string, allowedTenantLabelValues []string, t
 	expr, err := parser.ParseExpr(query)
 	if err != nil {
 		log.Warn().Msg("Failed to parse query.")
-		return "", err
+		return "", &PromQLError{err}
 	}
 
 	extractedLabelInfo, err := extractPromTenantValues(expr, tenantLabelName)
 	if err != nil {
 		log.Warn().Msg("The query cannot be handled because of a problem with tenant label values and/or operators.")
-		return "", err
+		return "", &PromQLError{err}
 	}
 
 	processedLabelInfo, err := processLabelValues(extractedLabelInfo, allowedTenantLabelValues, errorOnIllegalTenantValue)
 	if err != nil {
 		log.Warn().Msg("Unable to process the label values.")
-		return "", err
+		return "", &PromQLError{err}
 	}
 
 	labelEnforcer := enforcer.NewPromQLEnforcer(false, &labels.Matcher{
@@ -60,7 +72,7 @@ func (PromQLEnforcer) Enforce(query string, allowedTenantLabelValues []string, t
 	err = labelEnforcer.EnforceNode(expr)
 	if err != nil {
 		log.Warn().Msg("The promql label enforcer was unhappy.")
-		return "", err
+		return "", &PromQLError{err}
 	}
 	log.Trace().Str("function", "enforcer").Str("approved query", expr.String()).Msg("")
 	log.Trace().Msg("Returning approved expression.")
