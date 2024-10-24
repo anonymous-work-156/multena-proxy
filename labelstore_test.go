@@ -61,10 +61,16 @@ func TestGetLabelsCM(t *testing.T) {
 		},
 	}
 
+	app := &App{}
+	app.WithConfig()
+	app.Cfg.Admin.GroupBypass = false
+	app.Cfg.Admin.MagicValueBypass = true
+	app.Cfg.Admin.MagicValue = "#cluster-wide"
+
 	for _, tc := range cases {
 
 		t.Run(tc.name, func(t *testing.T) {
-			labels, skip := cmh.GetLabels(OAuthToken{PreferredUsername: tc.username, Groups: tc.groups})
+			labels, skip := cmh.GetLabels(OAuthToken{PreferredUsername: tc.username, Groups: tc.groups}, app)
 			happy := assert.ElementsMatch(t, tc.expected, labels)
 			happy = happy && assert.Equal(t, tc.skip, skip)
 

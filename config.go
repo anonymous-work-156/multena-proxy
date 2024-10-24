@@ -36,8 +36,10 @@ type Config struct {
 	} `mapstructure:"web"`
 
 	Admin struct {
-		Bypass bool   `mapstructure:"bypass"`
-		Group  string `mapstructure:"group"`
+		GroupBypass      bool   `mapstructure:"group_bypass"`       // enable or disable admin group bypass
+		Group            string `mapstructure:"group"`              // the name of the admin group
+		MagicValueBypass bool   `mapstructure:"magic_value_bypass"` // enable or disable magic value bypass
+		MagicValue       string `mapstructure:"magic_value"`        // the magic value which bypasses checks
 	} `mapstructure:"admin"`
 
 	Dev struct {

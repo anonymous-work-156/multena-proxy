@@ -97,7 +97,7 @@ func validateLabels(token OAuthToken, a *App) ([]string, bool, error) {
 		return nil, true, nil
 	}
 
-	tenantLabels, skip := a.LabelStore.GetLabels(token)
+	tenantLabels, skip := a.LabelStore.GetLabels(token, a)
 	if skip {
 		log.Debug().Str("user", token.PreferredUsername).Bool("Admin", false).Msg("Skipping label enforcement")
 		return nil, true, nil
@@ -111,5 +111,5 @@ func validateLabels(token OAuthToken, a *App) ([]string, bool, error) {
 }
 
 func isAdmin(token OAuthToken, a *App) bool {
-	return ContainsIgnoreCase(token.Groups, a.Cfg.Admin.Group) && a.Cfg.Admin.Bypass
+	return ContainsIgnoreCase(token.Groups, a.Cfg.Admin.Group) && a.Cfg.Admin.GroupBypass
 }

@@ -14,8 +14,10 @@ web:
   header_containing_jwt: Authorization
 
 admin:
-  bypass: true # enable admin bypass
-  group: gepardec-run-admins # group name for admin bypass
+  group_bypass: true           # enable or disable admin group bypass
+  group: ""                    # the name of the admin group
+  magic_value_bypass: false    # enable or disable magic value bypass
+  magic_value: "#cluster-wide" # the magic value which bypasses checks
 
 dev:
   enabled: false # enable dev mode, but dont use in production

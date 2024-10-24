@@ -21,7 +21,7 @@ type Labelstore interface {
 	// GetLabels retrieves labels associated with the provided OAuth token.
 	// Returns a map containing the labels and a boolean indicating whether
 	// the label is cluster-wide or not.
-	GetLabels(token OAuthToken) ([]string, bool)
+	GetLabels(token OAuthToken, a *App) ([]string, bool)
 }
 
 // WithLabelStore initializes and connects to a LabelStore specified in the
@@ -79,7 +79,7 @@ func (c *ConfigMapHandler) Connect(_ App) error {
 	return nil
 }
 
-func (c *ConfigMapHandler) GetLabels(token OAuthToken) ([]string, bool) {
+func (c *ConfigMapHandler) GetLabels(token OAuthToken, a *App) ([]string, bool) {
 	// NOTE: the config system (Viper) is case-insensitive for keys, which appears to mean it returns lower-case for our maps of label to bool
 	username := strings.ToLower(token.PreferredUsername)
 	groups := token.Groups
@@ -89,7 +89,7 @@ func (c *ConfigMapHandler) GetLabels(token OAuthToken) ([]string, bool) {
 			continue // pointing a key at false is the same as not including the key at all
 		}
 		mergedValues[k] = true
-		if k == "#cluster-wide" {
+		if a != nil && a.Cfg.Admin.MagicValueBypass && k == a.Cfg.Admin.MagicValue {
 			return nil, true
 		}
 	}
@@ -99,7 +99,7 @@ func (c *ConfigMapHandler) GetLabels(token OAuthToken) ([]string, bool) {
 				continue // pointing a key at false is the same as not including the key at all
 			}
 			mergedValues[k] = true
-			if k == "#cluster-wide" {
+			if a != nil && a.Cfg.Admin.MagicValueBypass && k == a.Cfg.Admin.MagicValue {
 				return nil, true
 			}
 		}
@@ -144,7 +144,7 @@ func (m *MySQLHandler) Close() {
 	}
 }
 
-func (m *MySQLHandler) GetLabels(token OAuthToken) ([]string, bool) {
+func (m *MySQLHandler) GetLabels(token OAuthToken, a *App) ([]string, bool) {
 	tokenMap := map[string]string{
 		"email":    token.Email,
 		"username": token.PreferredUsername,
@@ -173,14 +173,24 @@ func (m *MySQLHandler) GetLabels(token OAuthToken) ([]string, bool) {
 	if err != nil {
 		log.Fatal().Err(err).Str("query", m.Query).Msg("Error while querying database")
 	}
-	labels := make(map[string]bool) // using a map here may be mostly pointless, but does de-dupe if that is a concern
+
+	// using a map here may be mostly pointless, but does de-dupe if that is a concern
+	labels := make(map[string]bool)
+
 	for res.Next() {
 		var label string
 		err = res.Scan(&label)
-		labels[label] = true
 		if err != nil {
 			log.Fatal().Err(err).Msg("Error scanning DB result")
 		}
+
+		// support the magic value for bypassing checks
+		if a != nil && a.Cfg.Admin.MagicValueBypass && label == a.Cfg.Admin.MagicValue {
+			return nil, true
+		}
+
+		// the value being pointed at is not important
+		labels[label] = true
 	}
 	return MapKeysToArray(labels), false
 }

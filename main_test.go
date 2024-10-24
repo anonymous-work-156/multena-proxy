@@ -331,6 +331,7 @@ func Test_reverseProxy(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 
 			// Create a request
+			log.Debug().Str("URL", tc.URL).Str("Authorization", tc.authorization).Msg("Request")
 			req, err := http.NewRequest("GET", tc.URL, nil)
 			if err != nil {
 				t.Fatal(err)
@@ -351,7 +352,6 @@ func Test_reverseProxy(t *testing.T) {
 			}
 
 			// Call the function
-			log.Debug().Str("URL", tc.URL).Str("Authorization", tc.authorization).Msg("Request")
 			app.e.ServeHTTP(rr, req)
 
 			// Check the status code
@@ -372,7 +372,7 @@ func TestIsAdminSkip(t *testing.T) {
 
 	app := &App{}
 	app.WithConfig()
-	app.Cfg.Admin.Bypass = true
+	app.Cfg.Admin.GroupBypass = true
 	app.Cfg.Admin.Group = "gepardec-run-admins"
 	token := &OAuthToken{Groups: []string{"gepardec-run-admins"}}
 	a.True(isAdmin(*token, app))
