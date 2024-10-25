@@ -115,7 +115,7 @@ func setLokiTenantValues(expr logqlv3.Expr, tenantLabelName string, processedLab
 		}
 
 		if !found {
-			appendme := []*labels.Matcher{&labels.Matcher{
+			appendme := []*labels.Matcher{{
 				Type:  processedLabelInfo.Type,
 				Name:  tenantLabelName,
 				Value: processedLabelInfo.Value,

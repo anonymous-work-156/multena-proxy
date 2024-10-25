@@ -31,6 +31,16 @@ func Test_promqlEnforcer(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "1 of 1, doubled up",
+			args: args{
+				query:                     "up{namespace=\"namespace1\",bob=\"joe\"} * up{namespace=\"namespace1\",foo=\"bar\"}",
+				allowedTenantLabelValues:  []string{"namespace1"},
+				errorOnIllegalTenantValue: false,
+			},
+			want:    []string{"up{bob=\"joe\",namespace=\"namespace1\"} * up{foo=\"bar\",namespace=\"namespace1\"}"},
+			wantErr: false,
+		},
+		{
 			name: "1 of 1, with regex",
 			args: args{
 				query:                     "up{namespace=~\"namespace1\"}", // should be identical to using the = operator
@@ -48,6 +58,16 @@ func Test_promqlEnforcer(t *testing.T) {
 				errorOnIllegalTenantValue: false,
 			},
 			want:    []string{"up{namespace=\"namespace11\"}"},
+			wantErr: false,
+		},
+		{
+			name: "1 of 1, doubled with regex",
+			args: args{
+				query:                     "up{namespace=~\".*\"} * up{namespace=~\".*\"}",
+				allowedTenantLabelValues:  []string{"namespace11"},
+				errorOnIllegalTenantValue: false,
+			},
+			want:    []string{"up{namespace=\"namespace11\"} * up{namespace=\"namespace11\"}"},
 			wantErr: false,
 		},
 		{
@@ -81,13 +101,43 @@ func Test_promqlEnforcer(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "1 of 1, complex query",
+			args: args{
+				query:                     "sum(kube_pod_container_resource_requests{node!=\"\",resource=\"memory\"} * on(cluster,pod,namespace) group_left(phase) kube_pod_status_phase{phase=\"Running\"}) by (node,cluster,pod,namespace)",
+				allowedTenantLabelValues:  []string{"namespace1"},
+				errorOnIllegalTenantValue: false,
+			},
+			want:    []string{"sum by (node, cluster, pod, namespace) (kube_pod_container_resource_requests{namespace=\"namespace1\",node!=\"\",resource=\"memory\"} * on (cluster, pod, namespace) group_left (phase) kube_pod_status_phase{namespace=\"namespace1\",phase=\"Running\"})"},
+			wantErr: false,
+		},
+		{
+			name: "1 of 1, rate query",
+			args: args{
+				query:                     "rate(container_cpu_usage_seconds_total[5m])",
+				allowedTenantLabelValues:  []string{"namespace1"},
+				errorOnIllegalTenantValue: false,
+			},
+			want:    []string{"rate(container_cpu_usage_seconds_total{namespace=\"namespace1\"}[5m])"},
+			wantErr: false,
+		},
+		{
+			name: "1 of 1, two part rate query",
+			args: args{
+				query:                     "rate(container_cpu_usage_seconds_total{workload=\"a\"}[5m]) / rate(container_cpu_usage_seconds_total{workload=\"b\"}[5m])",
+				allowedTenantLabelValues:  []string{"namespace1"},
+				errorOnIllegalTenantValue: false,
+			},
+			want:    []string{"rate(container_cpu_usage_seconds_total{namespace=\"namespace1\",workload=\"a\"}[5m]) / rate(container_cpu_usage_seconds_total{namespace=\"namespace1\",workload=\"b\"}[5m])"},
+			wantErr: false,
+		},
+		{
 			name: "1 of 2",
 			args: args{
 				query:                     "{__name__=\"up\",namespace=\"namespace1\"}",
 				allowedTenantLabelValues:  []string{"namespace1", "namespace2"},
 				errorOnIllegalTenantValue: false,
 			},
-			want:    []string{"{__name__=\"up\",namespace=\"namespace1\"}"},
+			want:    []string{"{__name__=\"up\",namespace=\"namespace1b\"}"},
 			wantErr: false,
 		},
 		{
@@ -107,8 +157,8 @@ func Test_promqlEnforcer(t *testing.T) {
 				allowedTenantLabelValues:  []string{"namespace25", "namespace23"},
 				errorOnIllegalTenantValue: false,
 			},
-			want:    []string{"up{namespace=~\"namespace.*\",namespace=~\"namespace23|namespace25\"}", "up{namespace=~\"namespace.*\",namespace=~\"namespace25|namespace23\"}"},
-			wantErr: false, // NOTE: this 'want' above includes the now-redundant input =~ op due to the implementation of PromQLEnforcer
+			want:    []string{"up{namespace=~\"namespace23|namespace25\"}", "up{namespace=~\"namespace25|namespace23\"}"},
+			wantErr: false,
 		},
 		{
 			name: "2 of 2, forbidden",
@@ -167,8 +217,8 @@ func Test_promqlEnforcer(t *testing.T) {
 				allowedTenantLabelValues:  []string{"namespace1", "namespace2", "namespace3"},
 				errorOnIllegalTenantValue: false,
 			},
-			want:    []string{"up{namespace!=\"namespace2\",namespace=~\"namespace1|namespace3\"}", "up{namespace!=\"namespace2\",namespace=~\"namespace3|namespace1\"}"},
-			wantErr: false, // NOTE: this 'want' above includes the now-redundant input != op due to the implementation of PromQLEnforcer
+			want:    []string{"up{namespace=~\"namespace1|namespace3\"}", "up{namespace=~\"namespace3|namespace1\"}"},
+			wantErr: false,
 		},
 		{
 			name: "2 of 3, with not regex",
@@ -177,8 +227,8 @@ func Test_promqlEnforcer(t *testing.T) {
 				allowedTenantLabelValues:  []string{"namespace1", "namespace2", "namespace3"},
 				errorOnIllegalTenantValue: false,
 			},
-			want:    []string{"up{namespace!~\".*2\",namespace=~\"namespace1|namespace3\"}", "up{namespace!~\".*2\",namespace=~\"namespace3|namespace1\"}"},
-			wantErr: false, // NOTE: this 'want' above includes the now-redundant input !~ op due to the implementation of PromQLEnforcer
+			want:    []string{"up{namespace=~\"namespace1|namespace3\"}", "up{namespace=~\"namespace3|namespace1\"}"},
+			wantErr: false,
 		},
 		{
 			name: "2 of 3, with not regex 2",
@@ -187,8 +237,8 @@ func Test_promqlEnforcer(t *testing.T) {
 				allowedTenantLabelValues:  []string{"namespace1", "namespace2", "namespace3"},
 				errorOnIllegalTenantValue: false,
 			},
-			want:    []string{"up{namespace!~\"namespace3\",namespace=~\"namespace1|namespace2\"}", "up{namespace!~\"namespace3\",namespace=~\"namespace2|namespace1\"}"},
-			wantErr: false, // NOTE: this 'want' above includes the now-redundant input !~ op due to the implementation of PromQLEnforcer
+			want:    []string{"up{namespace=~\"namespace1|namespace2\"}", "up{namespace=~\"namespace2|namespace1\"}"},
+			wantErr: false,
 		},
 	}
 

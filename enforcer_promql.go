@@ -7,7 +7,6 @@ import (
 
 	"github.com/rs/zerolog/log"
 
-	enforcer "github.com/prometheus-community/prom-label-proxy/injectproxy"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/promql/parser"
 )
@@ -63,17 +62,25 @@ func (PromQLEnforcer) Enforce(query string, allowedTenantLabelValues []string, t
 		return "", &PromQLError{err}
 	}
 
-	labelEnforcer := enforcer.NewPromQLEnforcer(false, &labels.Matcher{
-		Name:  tenantLabelName,
-		Type:  processedLabelInfo.Type,
-		Value: processedLabelInfo.Value,
+	parser.Inspect(expr, func(node parser.Node, path []parser.Node) error {
+
+		switch n := node.(type) {
+		case *parser.MatrixSelector:
+			if vs, ok := n.VectorSelector.(*parser.VectorSelector); ok {
+				vs.LabelMatchers = enforceMatchers(tenantLabelName, processedLabelInfo, vs.LabelMatchers)
+			} else {
+				// unclear how relevant this is, but we should probably complain if it were to happen
+				log.Warn().Msg("Failed to get a VectorSelector from the MatrixSelector.")
+			}
+
+		case *parser.VectorSelector:
+			n.LabelMatchers = enforceMatchers(tenantLabelName, processedLabelInfo, n.LabelMatchers)
+
+		}
+
+		return nil
 	})
 
-	err = labelEnforcer.EnforceNode(expr)
-	if err != nil {
-		log.Warn().Msg("The promql label enforcer was unhappy.")
-		return "", &PromQLError{err}
-	}
 	log.Trace().Str("function", "enforcer").Str("approved query", expr.String()).Msg("")
 	log.Trace().Msg("Returning approved expression.")
 	return expr.String(), nil
@@ -110,4 +117,23 @@ func extractPromTenantValues(expr parser.Expr, tenantLabelName string) (*LabelVa
 		return nil, fmt.Errorf("found conflicting values or operators for tenant label")
 	}
 	return nil, nil
+}
+
+// enforceMatchers examines the matchers in the given selector, and replaces any for our tenant label with our chosen value
+func enforceMatchers(tenantLabelName string, processedLabelInfo *LabelValueInfo, toCheck []*labels.Matcher) []*labels.Matcher {
+	var res []*labels.Matcher
+
+	for _, oneExistingMatcher := range toCheck {
+		if oneExistingMatcher.Name != tenantLabelName {
+			res = append(res, oneExistingMatcher)
+		}
+	}
+
+	res = append(res, &labels.Matcher{
+		Name:  tenantLabelName,
+		Type:  processedLabelInfo.Type,
+		Value: processedLabelInfo.Value,
+	})
+
+	return res
 }
