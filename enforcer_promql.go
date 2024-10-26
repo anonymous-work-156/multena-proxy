@@ -29,13 +29,8 @@ type PromQLEnforcer struct{}
 // Enforce enhances a given PromQL query string with additional label matchers,
 // ensuring that the query complies with the allowed tenant labels and specified label match.
 // It returns the enhanced query or an error if the query cannot be parsed or is not compliant.
-func (PromQLEnforcer) Enforce(query string, allowedTenantLabelValues []string, config interface{}) (string, error) {
+func (PromQLEnforcer) Enforce(query string, allowedTenantLabelValues []string, config *Config) (string, error) {
 	log.Trace().Str("function", "enforcer").Str("input query", query).Msg("")
-
-	var promConfig = config.(struct {
-		TenantLabel               string
-		ErrorOnIllegalTenantValue bool
-	})
 
 	if query == "" {
 		operator := "="
@@ -43,7 +38,7 @@ func (PromQLEnforcer) Enforce(query string, allowedTenantLabelValues []string, c
 			operator = "=~"
 		}
 		query = fmt.Sprintf("{%s%s\"%s\"}",
-			promConfig.TenantLabel,
+			config.Thanos.TenantLabel,
 			operator,
 			strings.Join(allowedTenantLabelValues, "|"))
 		log.Trace().Str("function", "enforcer").Str("default query", query).Msg("")
@@ -55,19 +50,19 @@ func (PromQLEnforcer) Enforce(query string, allowedTenantLabelValues []string, c
 		return "", &PromQLError{err}
 	}
 
-	extractedLabelInfo, err := extractPromTenantValues(expr, promConfig.TenantLabel)
+	extractedLabelInfo, err := extractPromTenantValues(expr, config.Thanos.TenantLabel)
 	if err != nil {
 		log.Warn().Msg("The query cannot be handled because of a problem with tenant label values and/or operators.")
 		return "", &PromQLError{err}
 	}
 
-	processedLabelInfo, err := processLabelValues(extractedLabelInfo, allowedTenantLabelValues, promConfig.ErrorOnIllegalTenantValue)
+	processedLabelInfo, err := processLabelValues(extractedLabelInfo, allowedTenantLabelValues, config.Thanos.ErrorOnIllegalTenantValue)
 	if err != nil {
 		log.Warn().Msg("Unable to process the label values.")
 		return "", &PromQLError{err}
 	}
 
-	enforceQuery(promConfig.TenantLabel, processedLabelInfo, expr)
+	enforceQuery(config.Thanos.TenantLabel, processedLabelInfo, expr)
 
 	log.Trace().Str("function", "enforcer").Str("approved query", expr.String()).Msg("")
 	log.Trace().Msg("Returning approved expression.")

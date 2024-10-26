@@ -69,7 +69,6 @@ func (a *App) WithLoki() *App {
 		{Url: "/api/v1/query_exemplars", MatchWord: "query"},
 		{Url: "/api/v1/status/buildinfo", MatchWord: "query"},
 	}
-	var config interface{} = a.Cfg.Loki
 	lokiRouter := a.e.PathPrefix(a.Cfg.Loki.PathPrefix).Subrouter()
 	for _, route := range routes {
 		log.Trace().Any("route", route).Msg("Loki route")
@@ -79,8 +78,7 @@ func (a *App) WithLoki() *App {
 				a.Cfg.Loki.URL,
 				a.Cfg.Loki.UseMutualTLS,
 				a.Cfg.Loki.Headers,
-				a,
-				config)).Name(route.Url)
+				a)).Name(route.Url)
 	}
 	return a
 }
@@ -104,8 +102,6 @@ func (a *App) WithThanos() *App {
 		{Url: "/api/v1/query_exemplars", MatchWord: "query"},
 		{Url: "/api/v1/status/buildinfo", MatchWord: "query"},
 	}
-	//config := a.Cfg.Thanos
-	var config interface{} = a.Cfg.Thanos
 	thanosRouter := a.e.PathPrefix(a.Cfg.Thanos.PathPrefix).Subrouter()
 	for _, route := range routes {
 		log.Trace().Any("route", route).Msg("Thanos route")
@@ -115,9 +111,7 @@ func (a *App) WithThanos() *App {
 				a.Cfg.Thanos.URL,
 				a.Cfg.Thanos.UseMutualTLS,
 				a.Cfg.Thanos.Headers,
-				a,
-				config)).Name(route.Url)
-
+				a)).Name(route.Url)
 	}
 	return a
 }
@@ -139,7 +133,7 @@ func (a *App) WithThanos() *App {
 //
 // Finally, if all checks and possible enforcement pass successfully, the request is
 // streamed to the upstream server.
-func handler(matchWord string, enforcer EnforceQL, dsURL string, tls bool, headers map[string]string, a *App, config interface{}) func(http.ResponseWriter, *http.Request) {
+func handler(matchWord string, enforcer EnforceQL, dsURL string, tls bool, headers map[string]string, a *App) func(http.ResponseWriter, *http.Request) {
 	upstreamURL, err := url.Parse(dsURL)
 	if err != nil {
 		log.Fatal().Err(err).Str("url", dsURL).Msg("Error parsing URL")
@@ -161,7 +155,7 @@ func handler(matchWord string, enforcer EnforceQL, dsURL string, tls bool, heade
 			return
 		}
 
-		err = enforceRequest(r, enforcer, labels, matchWord, config)
+		err = enforceRequest(r, enforcer, labels, matchWord, a.Cfg)
 		if err != nil {
 			logAndWriteError(w, http.StatusForbidden, err, "")
 			return

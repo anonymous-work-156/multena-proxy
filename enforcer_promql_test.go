@@ -137,7 +137,7 @@ func Test_promqlEnforcer(t *testing.T) {
 				allowedTenantLabelValues:  []string{"namespace1", "namespace2"},
 				errorOnIllegalTenantValue: false,
 			},
-			want:    []string{"{__name__=\"up\",namespace=\"namespace1b\"}"},
+			want:    []string{"{__name__=\"up\",namespace=\"namespace1\"}"},
 			wantErr: false,
 		},
 		{
@@ -248,12 +248,11 @@ func Test_promqlEnforcer(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			log.Info().Str("name", tt.name).Msg("PromQL enforcer test")
 
-			var config = struct {
-				TenantLabel               string
-				ErrorOnIllegalTenantValue bool
-			}{"namespace", tt.args.errorOnIllegalTenantValue}
+			config := Config{}
+			config.Thanos.TenantLabel = "namespace"
+			config.Thanos.ErrorOnIllegalTenantValue = tt.args.errorOnIllegalTenantValue
 
-			got, err := enforcer.Enforce(tt.args.query, tt.args.allowedTenantLabelValues, config)
+			got, err := enforcer.Enforce(tt.args.query, tt.args.allowedTenantLabelValues, &config)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("promqlEnforcer() error = %v, wantErr = %v", err, tt.wantErr)
 			}

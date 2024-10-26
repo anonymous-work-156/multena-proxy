@@ -17,13 +17,8 @@ type LogQLEnforcer struct{}
 // If the input query is empty, a new query is constructed to match provided tenant labels.
 // If the input query is non-empty, it is parsed and modified to ensure tenant isolation.
 // Returns the modified query or an error if parsing or modification fails.
-func (LogQLEnforcer) Enforce(query string, allowedTenantLabelValues []string, config interface{}) (string, error) {
+func (LogQLEnforcer) Enforce(query string, allowedTenantLabelValues []string, config *Config) (string, error) {
 	log.Trace().Str("function", "enforcer").Str("input query", query).Msg("")
-
-	var lokiConfig = config.(struct {
-		TenantLabel               string
-		ErrorOnIllegalTenantValue bool
-	})
 
 	if query == "" {
 		operator := "="
@@ -31,7 +26,7 @@ func (LogQLEnforcer) Enforce(query string, allowedTenantLabelValues []string, co
 			operator = "=~"
 		}
 		query = fmt.Sprintf("{%s%s\"%s\"}",
-			lokiConfig.TenantLabel,
+			config.Loki.TenantLabel,
 			operator,
 			strings.Join(allowedTenantLabelValues, "|"))
 		log.Trace().Str("function", "enforcer").Str("default query", query).Msg("")
@@ -42,19 +37,19 @@ func (LogQLEnforcer) Enforce(query string, allowedTenantLabelValues []string, co
 		return "", err
 	}
 
-	extractedLabelInfo, err := extractLokiTenantValues(expr, lokiConfig.TenantLabel)
+	extractedLabelInfo, err := extractLokiTenantValues(expr, config.Loki.TenantLabel)
 	if err != nil {
 		log.Warn().Msg("The query cannot be handled because of a problem with tenant label values and/or operators.")
 		return "", err
 	}
 
-	processedLabelInfo, err := processLabelValues(extractedLabelInfo, allowedTenantLabelValues, lokiConfig.ErrorOnIllegalTenantValue)
+	processedLabelInfo, err := processLabelValues(extractedLabelInfo, allowedTenantLabelValues, config.Loki.ErrorOnIllegalTenantValue)
 	if err != nil {
 		log.Warn().Msg("Unable to process the label values.")
 		return "", err
 	}
 
-	setLokiTenantValues(expr, lokiConfig.TenantLabel, processedLabelInfo)
+	setLokiTenantValues(expr, config.Loki.TenantLabel, processedLabelInfo)
 
 	log.Trace().Str("function", "enforcer").Str("query", expr.String()).Msg("enforcing")
 	return expr.String(), nil
