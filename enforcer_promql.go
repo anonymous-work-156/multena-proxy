@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"maps"
+	"slices"
 	"strings"
 
 	"github.com/rs/zerolog/log"
@@ -62,7 +63,7 @@ func (PromQLEnforcer) Enforce(query string, allowedTenantLabelValues []string, c
 		return "", &PromQLError{err}
 	}
 
-	enforceQuery(config.Thanos.TenantLabel, processedLabelInfo, expr)
+	enforceQuery(config.Thanos.TenantLabel, config.Thanos.UnfilteredMetrics, processedLabelInfo, expr)
 
 	log.Trace().Str("function", "enforcer").Str("approved query", expr.String()).Msg("")
 	log.Trace().Msg("Returning approved expression.")
@@ -103,22 +104,24 @@ func extractPromTenantValues(expr parser.Expr, tenantLabelName string) (*LabelVa
 }
 
 // enforceQuery goes through the elements of the query and sends the selectors onwards for label enforcement
-func enforceQuery(tenantLabelName string, processedLabelInfo *LabelValueInfo, expr parser.Node) {
+func enforceQuery(tenantLabelName string, unfilteredMetrics []string, processedLabelInfo *LabelValueInfo, expr parser.Node) {
 	parser.Inspect(expr, func(node parser.Node, path []parser.Node) error {
 
 		switch n := node.(type) {
 		case *parser.MatrixSelector:
 			if vs, ok := n.VectorSelector.(*parser.VectorSelector); ok {
-				vs.LabelMatchers = enforceMatchers(tenantLabelName, processedLabelInfo, vs.LabelMatchers)
+				if !slices.Contains(unfilteredMetrics, vs.Name) {
+					vs.LabelMatchers = enforceMatchers(tenantLabelName, processedLabelInfo, vs.LabelMatchers)
+				}
 			} else {
 				// unclear how relevant this is, but we should probably complain if it were to happen
 				log.Warn().Msg("Failed to get a VectorSelector from the MatrixSelector.")
 			}
 
 		case *parser.VectorSelector:
-			// n.Name
-			n.LabelMatchers = enforceMatchers(tenantLabelName, processedLabelInfo, n.LabelMatchers)
-
+			if !slices.Contains(unfilteredMetrics, n.Name) {
+				n.LabelMatchers = enforceMatchers(tenantLabelName, processedLabelInfo, n.LabelMatchers)
+			}
 		}
 
 		return nil
