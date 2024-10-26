@@ -167,7 +167,13 @@ func TestLogqlEnforcer(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			log.Info().Str("name", tt.name).Msg("LogQL enforcer test")
-			got, err := enforcer.Enforce(tt.args.query, tt.args.allowedTenantLabelValues, "kubernetes_namespace_name", tt.args.errorOnIllegalTenantValue)
+
+			var config = struct {
+				TenantLabel               string
+				ErrorOnIllegalTenantValue bool
+			}{"kubernetes_namespace_name", tt.args.errorOnIllegalTenantValue}
+
+			got, err := enforcer.Enforce(tt.args.query, tt.args.allowedTenantLabelValues, config)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("logqlEnforcer() error = %v, wantErr = %v", err, tt.wantErr)
 			}

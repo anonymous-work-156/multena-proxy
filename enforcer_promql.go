@@ -29,8 +29,13 @@ type PromQLEnforcer struct{}
 // Enforce enhances a given PromQL query string with additional label matchers,
 // ensuring that the query complies with the allowed tenant labels and specified label match.
 // It returns the enhanced query or an error if the query cannot be parsed or is not compliant.
-func (PromQLEnforcer) Enforce(query string, allowedTenantLabelValues []string, tenantLabelName string, errorOnIllegalTenantValue bool) (string, error) {
+func (PromQLEnforcer) Enforce(query string, allowedTenantLabelValues []string, config interface{}) (string, error) {
 	log.Trace().Str("function", "enforcer").Str("input query", query).Msg("")
+
+	var promConfig = config.(struct {
+		TenantLabel               string
+		ErrorOnIllegalTenantValue bool
+	})
 
 	if query == "" {
 		operator := "="
@@ -38,7 +43,7 @@ func (PromQLEnforcer) Enforce(query string, allowedTenantLabelValues []string, t
 			operator = "=~"
 		}
 		query = fmt.Sprintf("{%s%s\"%s\"}",
-			tenantLabelName,
+			promConfig.TenantLabel,
 			operator,
 			strings.Join(allowedTenantLabelValues, "|"))
 		log.Trace().Str("function", "enforcer").Str("default query", query).Msg("")
@@ -50,36 +55,19 @@ func (PromQLEnforcer) Enforce(query string, allowedTenantLabelValues []string, t
 		return "", &PromQLError{err}
 	}
 
-	extractedLabelInfo, err := extractPromTenantValues(expr, tenantLabelName)
+	extractedLabelInfo, err := extractPromTenantValues(expr, promConfig.TenantLabel)
 	if err != nil {
 		log.Warn().Msg("The query cannot be handled because of a problem with tenant label values and/or operators.")
 		return "", &PromQLError{err}
 	}
 
-	processedLabelInfo, err := processLabelValues(extractedLabelInfo, allowedTenantLabelValues, errorOnIllegalTenantValue)
+	processedLabelInfo, err := processLabelValues(extractedLabelInfo, allowedTenantLabelValues, promConfig.ErrorOnIllegalTenantValue)
 	if err != nil {
 		log.Warn().Msg("Unable to process the label values.")
 		return "", &PromQLError{err}
 	}
 
-	parser.Inspect(expr, func(node parser.Node, path []parser.Node) error {
-
-		switch n := node.(type) {
-		case *parser.MatrixSelector:
-			if vs, ok := n.VectorSelector.(*parser.VectorSelector); ok {
-				vs.LabelMatchers = enforceMatchers(tenantLabelName, processedLabelInfo, vs.LabelMatchers)
-			} else {
-				// unclear how relevant this is, but we should probably complain if it were to happen
-				log.Warn().Msg("Failed to get a VectorSelector from the MatrixSelector.")
-			}
-
-		case *parser.VectorSelector:
-			n.LabelMatchers = enforceMatchers(tenantLabelName, processedLabelInfo, n.LabelMatchers)
-
-		}
-
-		return nil
-	})
+	enforceQuery(promConfig.TenantLabel, processedLabelInfo, expr)
 
 	log.Trace().Str("function", "enforcer").Str("approved query", expr.String()).Msg("")
 	log.Trace().Msg("Returning approved expression.")
@@ -117,6 +105,29 @@ func extractPromTenantValues(expr parser.Expr, tenantLabelName string) (*LabelVa
 		return nil, fmt.Errorf("found conflicting values or operators for tenant label")
 	}
 	return nil, nil
+}
+
+// enforceQuery goes through the elements of the query and sends the selectors onwards for label enforcement
+func enforceQuery(tenantLabelName string, processedLabelInfo *LabelValueInfo, expr parser.Node) {
+	parser.Inspect(expr, func(node parser.Node, path []parser.Node) error {
+
+		switch n := node.(type) {
+		case *parser.MatrixSelector:
+			if vs, ok := n.VectorSelector.(*parser.VectorSelector); ok {
+				vs.LabelMatchers = enforceMatchers(tenantLabelName, processedLabelInfo, vs.LabelMatchers)
+			} else {
+				// unclear how relevant this is, but we should probably complain if it were to happen
+				log.Warn().Msg("Failed to get a VectorSelector from the MatrixSelector.")
+			}
+
+		case *parser.VectorSelector:
+			// n.Name
+			n.LabelMatchers = enforceMatchers(tenantLabelName, processedLabelInfo, n.LabelMatchers)
+
+		}
+
+		return nil
+	})
 }
 
 // enforceMatchers examines the matchers in the given selector, and replaces any for our tenant label with our chosen value
