@@ -12,7 +12,7 @@ func Test_promqlEnforcer(t *testing.T) {
 		query                     string
 		allowedTenantLabelValues  []string
 		errorOnIllegalTenantValue bool
-		unfilteredMetrics         []string
+		metricsTenantOptional     []string
 	}
 
 	tests := []struct {
@@ -107,7 +107,7 @@ func Test_promqlEnforcer(t *testing.T) {
 				query:                     "rate(container_cpu_usage_seconds_total[5m])",
 				allowedTenantLabelValues:  []string{"namespace1"},
 				errorOnIllegalTenantValue: false,
-				unfilteredMetrics:         []string{"irrelevantnoise"},
+				metricsTenantOptional:     []string{"irrelevantnoise"},
 			},
 			want:    []string{"rate(container_cpu_usage_seconds_total{namespace=\"namespace1\"}[5m])"},
 			wantErr: false,
@@ -123,56 +123,56 @@ func Test_promqlEnforcer(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "1 of 1, unfiltered",
+			name: "1 of 1, optional tenant",
 			args: args{
 				query:                     "up{namespace=\"namespace2\"}",
 				allowedTenantLabelValues:  []string{"namespace1"},
 				errorOnIllegalTenantValue: false,
-				unfilteredMetrics:         []string{"up"},
+				metricsTenantOptional:     []string{"up"},
 			},
 			want:    []string{"up{namespace!=\"\",namespace=\"\"}"},
 			wantErr: false,
 		},
 		{
-			name: "1 of 1, unfiltered complex",
+			name: "1 of 1, optional tenant complex",
 			args: args{
 				query:                     "sum(rate(container_cpu_usage_seconds_total{namespace=\"namespace1\"}[5m])) / sum(machine_cpu_cores{cluster=\"mahcluster\"}) * 100",
 				allowedTenantLabelValues:  []string{"namespace1"},
 				errorOnIllegalTenantValue: false,
-				unfilteredMetrics:         []string{"machine_cpu_cores"},
+				metricsTenantOptional:     []string{"machine_cpu_cores"},
 			},
 			want:    []string{"sum(rate(container_cpu_usage_seconds_total{namespace=\"namespace1\"}[5m])) / sum(machine_cpu_cores{cluster=\"mahcluster\",namespace=~\"namespace1|\"}) * 100"},
 			wantErr: false,
 		},
 		{
-			name: "1 of 1, unfiltered complex 2",
+			name: "1 of 1, optional tenant complex 2",
 			args: args{
 				query:                     "sum(machine_cpu_cores{cluster=\"mahcluster\",namespace=~\".*\"}) / sum(rate(container_cpu_usage_seconds_total{namespace=~\".*\"}[5m])) * 100",
 				allowedTenantLabelValues:  []string{"namespace1"},
 				errorOnIllegalTenantValue: false,
-				unfilteredMetrics:         []string{"machine_cpu_cores"},
+				metricsTenantOptional:     []string{"machine_cpu_cores"},
 			},
 			want:    []string{"sum(machine_cpu_cores{cluster=\"mahcluster\",namespace=~\"namespace1|\"}) / sum(rate(container_cpu_usage_seconds_total{namespace=\"namespace1\"}[5m])) * 100"},
 			wantErr: false,
 		},
 		{
-			name: "1 of 1, unfiltered complex fail",
+			name: "1 of 1, optional tenant complex fail",
 			args: args{
 				query:                     "sum(rate(container_cpu_usage_seconds_total{namespace=\"namespace2\"}[5m])) / sum(machine_cpu_cores{cluster=\"mahcluster\"}) * 100",
 				allowedTenantLabelValues:  []string{"namespace1"},
 				errorOnIllegalTenantValue: true,
-				unfilteredMetrics:         []string{"machine_cpu_cores"},
+				metricsTenantOptional:     []string{"machine_cpu_cores"},
 			},
 			want:    []string{""},
 			wantErr: true,
 		},
 		{
-			name: "1 of 1, unfiltered complex fail 2",
+			name: "1 of 1, optional tenant complex fail 2",
 			args: args{
 				query:                     "sum(rate(container_cpu_usage_seconds_total{namespace=\"namespace2\"}[5m])) / sum(machine_cpu_cores{cluster=\"mahcluster\"}) * 100",
 				allowedTenantLabelValues:  []string{"namespace1"},
 				errorOnIllegalTenantValue: false,
-				unfilteredMetrics:         []string{"machine_cpu_cores"},
+				metricsTenantOptional:     []string{"machine_cpu_cores"},
 			},
 			want:    []string{"sum(rate(container_cpu_usage_seconds_total{namespace!=\"\",namespace=\"\"}[5m])) / sum(machine_cpu_cores{cluster=\"mahcluster\",namespace=~\"namespace1|\"}) * 100"},
 			wantErr: false,
@@ -287,6 +287,16 @@ func Test_promqlEnforcer(t *testing.T) {
 			want:    []string{"up{namespace=~\"namespace1|namespace2\"}", "up{namespace=~\"namespace2|namespace1\"}"},
 			wantErr: false,
 		},
+		{
+			name: "3 of 3, differing matchers",
+			args: args{
+				query:                     "sum(rate(container_cpu_usage_seconds_total{namespace=\"namespace1\"}[5m])) / sum(rate(container_cpu_usage_seconds_total{namespace!=\"namespace1\"}[5m])) * 100",
+				allowedTenantLabelValues:  []string{"namespace1", "namespace2", "namespace3"},
+				errorOnIllegalTenantValue: false,
+			},
+			want:    []string{"sum(rate(container_cpu_usage_seconds_total{namespace=\"namespace1\"}[5m])) / sum(rate(container_cpu_usage_seconds_total{namespace=~\"namespace2|namespace3\"}[5m])) * 100"},
+			wantErr: false,
+		},
 	}
 
 	enforcer := PromQLEnforcer{}
@@ -298,7 +308,7 @@ func Test_promqlEnforcer(t *testing.T) {
 			config := Config{}
 			config.Thanos.TenantLabel = "namespace"
 			config.Thanos.ErrorOnIllegalTenantValue = tt.args.errorOnIllegalTenantValue
-			config.Thanos.UnfilteredMetrics = tt.args.unfilteredMetrics
+			config.Thanos.MetricsTenantOptional = tt.args.metricsTenantOptional
 
 			got, err := enforcer.Enforce(tt.args.query, tt.args.allowedTenantLabelValues, &config)
 			if (err != nil) != tt.wantErr {

@@ -71,7 +71,7 @@ func enforcePromQuery(config *Config, allowedTenantLabelValues []string, expr pa
 		if n, ok := node.(*parser.VectorSelector); ok {
 
 			// for some metrics we allow there to be no value for the tenant label (i.e. "") even if that is not granted to the user/group in question
-			allowMissingTenant := slices.Contains(config.Thanos.UnfilteredMetrics, n.Name)
+			allowMissingTenant := slices.Contains(config.Thanos.MetricsTenantOptional, n.Name)
 
 			n.LabelMatchers, err = enforcePromMatchers(config.Thanos.TenantLabel, config.Thanos.ErrorOnIllegalTenantValue, allowMissingTenant, allowedTenantLabelValues, n.LabelMatchers)
 			if err != nil {

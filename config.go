@@ -67,7 +67,7 @@ type Config struct {
 		Cert                      string            `mapstructure:"cert"`
 		Key                       string            `mapstructure:"key"`
 		Headers                   map[string]string `mapstructure:"headers"`
-		UnfilteredMetrics         []string          `mapstructure:"unfiltered_metrics"` // metrics which are passed without any tenant label enforcement
+		MetricsTenantOptional     []string          `mapstructure:"metrics_tenant_optional"` // metrics for which its OK to have no tenant label
 	} `mapstructure:"thanos"`
 
 	Loki struct {
