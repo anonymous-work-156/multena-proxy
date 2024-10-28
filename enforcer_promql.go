@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"maps"
 	"slices"
 	"strings"
 
@@ -51,98 +50,102 @@ func (PromQLEnforcer) Enforce(query string, allowedTenantLabelValues []string, c
 		return "", &PromQLError{err}
 	}
 
-	extractedLabelInfo, err := extractPromTenantValues(expr, config.Thanos.TenantLabel)
+	err = enforcePromQuery(config, allowedTenantLabelValues, expr)
 	if err != nil {
-		log.Warn().Msg("The query cannot be handled because of a problem with tenant label values and/or operators.")
 		return "", &PromQLError{err}
 	}
-
-	processedLabelInfo, err := processLabelValues(extractedLabelInfo, allowedTenantLabelValues, config.Thanos.ErrorOnIllegalTenantValue)
-	if err != nil {
-		log.Warn().Msg("Unable to process the label values.")
-		return "", &PromQLError{err}
-	}
-
-	enforceQuery(config.Thanos.TenantLabel, config.Thanos.UnfilteredMetrics, processedLabelInfo, expr)
 
 	log.Trace().Str("function", "enforcer").Str("approved query", expr.String()).Msg("")
 	log.Trace().Msg("Returning approved expression.")
 	return expr.String(), nil
 }
 
-// extractPromTenantValues parses a PromQL expression and extracts labels and their values.
-// Returns a struct containing the operator and tenant label value which were found.
-// An error is returned if conflicting operator and/or values are found for the tenant label.
-// NOTE: It is crude to insist that only one distinct operator and value are associated with the tenant label; it forbids some valid queries.
-func extractPromTenantValues(expr parser.Expr, tenantLabelName string) (*LabelValueInfo, error) {
-	var info map[LabelValueInfo]bool = make(map[LabelValueInfo]bool)
+// enforcePromQuery goes through the elements of the query and sends the selectors onwards for label enforcement
+func enforcePromQuery(config *Config, allowedTenantLabelValues []string, expr parser.Node) error {
+	var errs []error = make([]error, 0)
+
 	parser.Inspect(expr, func(node parser.Node, path []parser.Node) error {
-		if vector, ok := node.(*parser.VectorSelector); ok {
-			for _, matcher := range vector.LabelMatchers {
-				if matcher.Name != tenantLabelName {
-					continue
-				}
-				thisinfo := LabelValueInfo{matcher.Value, matcher.Type}
-				_, ok = info[thisinfo]
-				if !ok {
-					info[thisinfo] = true
-				}
-			}
-		}
-		return nil
-	})
-	if len(info) == 1 {
-		for v := range maps.Keys(info) {
-			// WTF Go, is this the best way?
-			return &v, nil
-		}
-	}
-	if len(info) > 1 {
-		return nil, fmt.Errorf("found conflicting values or operators for tenant label")
-	}
-	return nil, nil
-}
+		var err error
 
-// enforceQuery goes through the elements of the query and sends the selectors onwards for label enforcement
-func enforceQuery(tenantLabelName string, unfilteredMetrics []string, processedLabelInfo *LabelValueInfo, expr parser.Node) {
-	parser.Inspect(expr, func(node parser.Node, path []parser.Node) error {
+		// we are only processing VectorSelector (note that MatrixSelector contains a VectorSelector which will also be visited by this function)
+		if n, ok := node.(*parser.VectorSelector); ok {
 
-		switch n := node.(type) {
-		case *parser.MatrixSelector:
-			if vs, ok := n.VectorSelector.(*parser.VectorSelector); ok {
-				if !slices.Contains(unfilteredMetrics, vs.Name) {
-					vs.LabelMatchers = enforceMatchers(tenantLabelName, processedLabelInfo, vs.LabelMatchers)
-				}
-			} else {
-				// unclear how relevant this is, but we should probably complain if it were to happen
-				log.Warn().Msg("Failed to get a VectorSelector from the MatrixSelector.")
-			}
+			// for some metrics we allow there to be no value for the tenant label (i.e. "") even if that is not granted to the user/group in question
+			allowMissingTenant := slices.Contains(config.Thanos.UnfilteredMetrics, n.Name)
 
-		case *parser.VectorSelector:
-			if !slices.Contains(unfilteredMetrics, n.Name) {
-				n.LabelMatchers = enforceMatchers(tenantLabelName, processedLabelInfo, n.LabelMatchers)
+			n.LabelMatchers, err = enforcePromMatchers(config.Thanos.TenantLabel, config.Thanos.ErrorOnIllegalTenantValue, allowMissingTenant, allowedTenantLabelValues, n.LabelMatchers)
+			if err != nil {
+				errs = append(errs, err)
 			}
 		}
 
 		return nil
 	})
+
+	if len(errs) > 0 {
+		return errs[0]
+	}
+	return nil
 }
 
-// enforceMatchers examines the matchers in the given selector, and replaces any for our tenant label with our chosen value
-func enforceMatchers(tenantLabelName string, processedLabelInfo *LabelValueInfo, toCheck []*labels.Matcher) []*labels.Matcher {
+// enforcePromMatchers examines the matchers in the given selector, and replaces any for our tenant label with our chosen value
+func enforcePromMatchers(tenantLabelName string, errorOnIllegalTenantValue bool, allowMissingTenant bool, allowedTenantLabelValues []string, originalMatchers []*labels.Matcher) ([]*labels.Matcher, error) {
+	var matchersFound []*labels.Matcher
+	var extractedLabelInfo *LabelValueInfo
 	var res []*labels.Matcher
 
-	for _, oneExistingMatcher := range toCheck {
-		if oneExistingMatcher.Name != tenantLabelName {
-			res = append(res, oneExistingMatcher)
+	// scan the list of matches, keep those which are not our tenant label without modification
+	// find matches on our tenant label, ensure that if there is more than one, that they are identical
+	for _, matcher := range originalMatchers {
+		log.Info().Str("name", matcher.Name).Msg("found a matcher")
+		if matcher.Name != tenantLabelName {
+			matchersFound = append(matchersFound, matcher)
+		} else {
+			// record the operator and value for our tenant label, ensure that if there are more than one, they are identical (i.e. redundant)
+			// we do not currently support multiple matchers for the tenant label even when they would be valid
+			var found = LabelValueInfo{matcher.Value, matcher.Type}
+			if extractedLabelInfo != nil && *extractedLabelInfo != found {
+				return nil, ErrMultipleValOrOper
+			}
+			extractedLabelInfo = &found
 		}
 	}
 
-	res = append(res, &labels.Matcher{
-		Name:  tenantLabelName,
-		Type:  processedLabelInfo.Type,
-		Value: processedLabelInfo.Value,
-	})
+	// sometimes we allow there to be no value for the tenant label (i.e. "") even if that is not granted to the user/group in question
+	// TODO: unsure if this effects the data that the original slice contains
+	if allowMissingTenant && !slices.Contains(allowedTenantLabelValues, "") {
+		allowedTenantLabelValues = append(allowedTenantLabelValues, "")
+	}
 
-	return res
+	// convert any tenant label found in context of the allowed values
+	processedLabelInfo, err := processLabelValues(extractedLabelInfo, allowedTenantLabelValues)
+
+	if err != nil {
+		if !errorOnIllegalTenantValue && (err == ErrUnauthorizedLabelValue || err == ErrNoLabelMatch) {
+			// we continue without an error, but insert conflicting matchers to ensure there is no result
+			// the user has either tried to use a forbidden tenant label value, or specified a value and operator that leads to no matches with allowed values
+			res = append(matchersFound, &labels.Matcher{
+				Name:  tenantLabelName,
+				Type:  labels.MatchEqual,
+				Value: "",
+			})
+			res = append(res, &labels.Matcher{
+				Name:  tenantLabelName,
+				Type:  labels.MatchNotEqual,
+				Value: "",
+			})
+		} else {
+			log.Warn().Msg("Unable to process the label values.")
+			return nil, err
+		}
+	} else {
+		// normal happy case where we attach one matcher
+		res = append(matchersFound, &labels.Matcher{
+			Name:  tenantLabelName,
+			Type:  processedLabelInfo.Type,
+			Value: processedLabelInfo.Value,
+		})
+	}
+
+	return res, nil
 }

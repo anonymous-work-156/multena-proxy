@@ -77,7 +77,27 @@ func TestLogqlEnforcer(t *testing.T) {
 				allowedTenantLabelValues:  []string{"test"},
 				errorOnIllegalTenantValue: false,
 			},
-			want:    []string{"{kubernetes_namespace_name=\"\"}"},
+			want:    []string{"{kubernetes_namespace_name=\"\", kubernetes_namespace_name!=\"\"}"},
+			wantErr: false,
+		},
+		{
+			name: "valid query and invalid tenant labels, no error 2",
+			args: args{
+				query:                     "{other_label=\"bob\", kubernetes_namespace_name=\"test3\"}",
+				allowedTenantLabelValues:  []string{"test1", "test2"},
+				errorOnIllegalTenantValue: false,
+			},
+			want:    []string{"{other_label=\"bob\", kubernetes_namespace_name=\"\", kubernetes_namespace_name!=\"\"}"},
+			wantErr: false,
+		},
+		{
+			name: "valid query and invalid tenant labels, no error 3",
+			args: args{
+				query:                     "{other_label=\"bob\", kubernetes_namespace_name=\"test3\", kubernetes_namespace_name=\"test3\"}",
+				allowedTenantLabelValues:  []string{"test1", "test2"},
+				errorOnIllegalTenantValue: false,
+			},
+			want:    []string{"{other_label=\"bob\", kubernetes_namespace_name=\"\", kubernetes_namespace_name!=\"\"}"},
 			wantErr: false,
 		},
 		{
@@ -113,19 +133,39 @@ func TestLogqlEnforcer(t *testing.T) {
 		{
 			name: "conflicting tenant labels, part 1",
 			args: args{
-				query:                     "{kubernetes_namespace_name=\"test1\", kubernetes_namespace_name!=\"test1\"}",
+				query:                     "{kubernetes_namespace_name=\"test1\", kubernetes_namespace_name=\"test1\"}",
 				allowedTenantLabelValues:  []string{"test1", "test2"},
 				errorOnIllegalTenantValue: false,
 			},
-			want:    []string{""},
-			wantErr: true,
+			want:    []string{"{kubernetes_namespace_name=\"test1\", kubernetes_namespace_name=\"test1\"}"},
+			wantErr: false,
 		},
 		{
 			name: "conflicting tenant labels, part 2",
 			args: args{
-				query:                     "{kubernetes_namespace_name=\"test1\", kubernetes_namespace_name=\"test2\"}",
+				query:                     "{other_label=\"bob\", kubernetes_namespace_name=\"test1\", kubernetes_namespace_name!=\"test1\"}",
 				allowedTenantLabelValues:  []string{"test1", "test2"},
 				errorOnIllegalTenantValue: false,
+			},
+			want:    []string{""},
+			wantErr: true, // found multiple values or operators for tenant label
+		},
+		{
+			name: "conflicting tenant labels, part 3",
+			args: args{
+				query:                     "{kubernetes_namespace_name=\"test1\", other_label=\"bob\", kubernetes_namespace_name=\"test2\"}",
+				allowedTenantLabelValues:  []string{"test1", "test2"},
+				errorOnIllegalTenantValue: false,
+			},
+			want:    []string{""},
+			wantErr: true, // found multiple values or operators for tenant label
+		},
+		{
+			name: "conflicting tenant labels, part 3b",
+			args: args{
+				query:                     "{kubernetes_namespace_name=\"test1\", other_label=\"bob\", kubernetes_namespace_name=\"test2\"}",
+				allowedTenantLabelValues:  []string{"test1", "test2"},
+				errorOnIllegalTenantValue: true,
 			},
 			want:    []string{""},
 			wantErr: true,

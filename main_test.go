@@ -231,7 +231,7 @@ func Test_reverseProxy(t *testing.T) {
 			authorization:             "Bearer " + tokens["groupTenant"],
 			URL:                       `/api/v1/query_range?query=up{tenant_id="forbidden_tenant"}`,
 			expectedStatus:            http.StatusForbidden,
-			expectedBody:              `{"status":"error","errorType":"bad_data","error": "unauthorized tenant label value forbidden_tenant"}` + "\n",
+			expectedBody:              `{"status":"error","errorType":"bad_data","error": "unauthorized tenant label value"}` + "\n",
 			errorOnIllegalTenantValue: true,
 		},
 		{
@@ -239,7 +239,7 @@ func Test_reverseProxy(t *testing.T) {
 			authorization:             "Bearer " + tokens["userTenant"],
 			URL:                       `/api/v1/query?query=up{tenant_id="another_forbidden_tenant"}`,
 			expectedStatus:            http.StatusForbidden,
-			expectedBody:              `{"status":"error","errorType":"bad_data","error": "unauthorized tenant label value another_forbidden_tenant"}` + "\n",
+			expectedBody:              `{"status":"error","errorType":"bad_data","error": "unauthorized tenant label value"}` + "\n",
 			errorOnIllegalTenantValue: true,
 		},
 		{
@@ -305,7 +305,7 @@ func Test_reverseProxy(t *testing.T) {
 			authorization:             "Bearer " + tokens["userTenant"],
 			URL:                       "/loki/api/v1/query_range?direction=backward&end=1690463973693000000&limit=10&query={tenant_id=\"forbidden_tenant\"} |= `path` |= `label` | json | line_format `{{.message}}` | json | line_format `{{.request}}` | json | line_format `{{.method}} {{.path}} {{.url | urldecode}}`&start=1690377573693000000&step=86400000ms",
 			expectedStatus:            http.StatusForbidden,
-			expectedBody:              "unauthorized tenant label value forbidden_tenant\n",
+			expectedBody:              "unauthorized tenant label value\n",
 			errorOnIllegalTenantValue: true,
 		},
 		{
@@ -321,7 +321,7 @@ func Test_reverseProxy(t *testing.T) {
 			authorization:             "Bearer " + tokens["userTenant"],
 			URL:                       `/loki/api/v1/query_range?direction=backward&end=1690463973693000000&limit=10&query={tenant_id="forbidden_tenant"}`,
 			expectedStatus:            http.StatusForbidden,
-			expectedBody:              "unauthorized tenant label value forbidden_tenant\n",
+			expectedBody:              "unauthorized tenant label value\n",
 			errorOnIllegalTenantValue: true,
 		},
 	}

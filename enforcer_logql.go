@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"maps"
 	"strings"
 
 	logqlv3 "github.com/grafana/loki/v3/pkg/logql/syntax"
@@ -37,90 +36,141 @@ func (LogQLEnforcer) Enforce(query string, allowedTenantLabelValues []string, co
 		return "", err
 	}
 
-	extractedLabelInfo, err := extractLokiTenantValues(expr, config.Loki.TenantLabel)
+	err = enforceLogQuery(expr, config.Loki.TenantLabel, config.Loki.ErrorOnIllegalTenantValue, allowedTenantLabelValues)
 	if err != nil {
-		log.Warn().Msg("The query cannot be handled because of a problem with tenant label values and/or operators.")
 		return "", err
 	}
-
-	processedLabelInfo, err := processLabelValues(extractedLabelInfo, allowedTenantLabelValues, config.Loki.ErrorOnIllegalTenantValue)
-	if err != nil {
-		log.Warn().Msg("Unable to process the label values.")
-		return "", err
-	}
-
-	setLokiTenantValues(expr, config.Loki.TenantLabel, processedLabelInfo)
 
 	log.Trace().Str("function", "enforcer").Str("query", expr.String()).Msg("enforcing")
 	return expr.String(), nil
 }
 
-// extractLokiTenantValues parses a LogQL expression and extracts labels and their values.
-// Returns a struct containing the operator and tenant label value which were found.
-// An error is returned if conflicting operator and/or values are found for the tenant label.
-// NOTE: It is crude to insist that only one distinct operator and value are associated with the tenant label; it forbids some valid queries.
-func extractLokiTenantValues(expr logqlv3.Expr, tenantLabelName string) (*LabelValueInfo, error) {
-	var info map[LabelValueInfo]bool = make(map[LabelValueInfo]bool)
+// enforceLogQuery ensures tenant label matchers in a LogQL query adhere to provided tenant labels.
+// It verifies that the tenant label exists in the query matchers, validating or modifying its values based on tenantLabels.
+func enforceLogQuery(expr logqlv3.Expr, tenantLabelName string, errorOnIllegalTenantValue bool, allowedTenantLabelValues []string) error {
+	var errs []error = make([]error, 0)
+
 	expr.Walk(func(expr2 logqlv3.Expr) {
 		matcherExpr, ok := expr2.(*logqlv3.MatchersExpr)
 		if !ok {
 			return // we are only looking for MatchersExpr
 		}
 
-		for _, matcher := range matcherExpr.Matchers() {
-			if matcher.Name != tenantLabelName {
-				continue
-			}
-			thisinfo := LabelValueInfo{matcher.Value, matcher.Type}
-			_, ok := info[thisinfo]
-			if !ok {
-				info[thisinfo] = true
-			}
+		err := enforceLogMatchers(tenantLabelName, errorOnIllegalTenantValue, allowedTenantLabelValues, matcherExpr)
+		if err != nil {
+			errs = append(errs, err)
 		}
 	})
-	if len(info) == 1 {
-		for v := range maps.Keys(info) {
-			// WTF Go, is this the best way?
-			return &v, nil
-		}
+
+	if len(errs) > 0 {
+		return errs[0]
 	}
-	if len(info) > 1 {
-		return nil, fmt.Errorf("found conflicting values or operators for tenant label")
-	}
-	return nil, nil
+	return nil
 }
 
-// setLokiTenantValues ensures tenant label matchers in a LogQL query adhere to provided tenant labels.
-// It verifies that the tenant label exists in the query matchers, validating or modifying its values based on tenantLabels.
-func setLokiTenantValues(expr logqlv3.Expr, tenantLabelName string, processedLabelInfo *LabelValueInfo) {
-	expr.Walk(func(expr2 logqlv3.Expr) {
-		matcherExpr, ok := expr2.(*logqlv3.MatchersExpr)
-		if !ok {
-			return // we are only looking for MatchersExpr
-		}
+// enforceLogMatchers examines the matchers in the given selector, and replaces any for our tenant label with our chosen value
+func enforceLogMatchers(tenantLabelName string, errorOnIllegalTenantValue bool, allowedTenantLabelValues []string, matcherExpr *logqlv3.MatchersExpr) error {
+	var extractedLabelInfo *LabelValueInfo
 
-		newmatcher := &labels.Matcher{
+	// scan the list of matches, find matches on our tenant label, ensure that if there is more than one, that they are identical
+	for _, matcher := range matcherExpr.Matchers() {
+		if matcher.Name == tenantLabelName {
+			// record the operator and value for our tenant label, ensure that if there are more than one, they are identical (i.e. redundant)
+			// we do not currently support multiple matchers for the tenant label even when they would be valid
+			var found = LabelValueInfo{matcher.Value, matcher.Type}
+			if extractedLabelInfo != nil && *extractedLabelInfo != found {
+				return ErrMultipleValOrOper
+			}
+			extractedLabelInfo = &found
+		}
+	}
+
+	// convert any tenant label found in context of the allowed values
+	processedLabelInfo, err := processLabelValues(extractedLabelInfo, allowedTenantLabelValues)
+
+	if err != nil {
+		if !errorOnIllegalTenantValue && (err == ErrUnauthorizedLabelValue || err == ErrNoLabelMatch) {
+			// we continue without an error, but insert conflicting matchers to ensure there is no result
+			// the user has either tried to use a forbidden tenant label value, or specified a value and operator that leads to no matches with allowed values
+			disableLogMatcherExpr(tenantLabelName, matcherExpr)
+		} else {
+			log.Warn().Msg("Unable to process the label values.")
+			return err
+		}
+	} else {
+		attachGoodMatcher(processedLabelInfo, tenantLabelName, matcherExpr)
+	}
+
+	return nil
+}
+
+func disableLogMatcherExpr(tenantLabelName string, matcherExpr *logqlv3.MatchersExpr) {
+	cnt := 0
+
+	// first, try to replace any matchers that already exist
+	// this is not strictly necessary, but the resulting query will be cleaner
+	matchers := matcherExpr.Matchers()
+	for idx, matcher := range matchers {
+		if matcher.Name == tenantLabelName {
+			op := labels.MatchEqual
+			if cnt > 0 {
+				op = labels.MatchNotEqual
+			}
+			newmatcher := &labels.Matcher{
+				Type:  op,
+				Name:  tenantLabelName,
+				Value: "",
+			}
+			matchers[idx] = newmatcher
+			cnt += 1
+		}
+	}
+
+	// if the tenant label matcher didn't exist at all, append one
+	if cnt == 0 {
+		appendme := []*labels.Matcher{{
+			Type:  labels.MatchEqual,
+			Name:  tenantLabelName,
+			Value: "",
+		}}
+		matcherExpr.AppendMatchers(appendme)
+		cnt += 1
+	}
+
+	// if only one copy of the tenant label matcher is defined so far, attach another one
+	if cnt == 1 {
+		appendme := []*labels.Matcher{{
+			Type:  labels.MatchNotEqual,
+			Name:  tenantLabelName,
+			Value: "",
+		}}
+		matcherExpr.AppendMatchers(appendme)
+	}
+}
+
+func attachGoodMatcher(processedLabelInfo *LabelValueInfo, tenantLabelName string, matcherExpr *logqlv3.MatchersExpr) {
+	// normal happy case where we overwrite/attach our matcher
+	newmatcher := &labels.Matcher{
+		Type:  processedLabelInfo.Type,
+		Name:  tenantLabelName,
+		Value: processedLabelInfo.Value,
+	}
+
+	found := false
+	matchers := matcherExpr.Matchers()
+	for idx, matcher := range matchers {
+		if matcher.Name == tenantLabelName {
+			matchers[idx] = newmatcher
+			found = true
+		}
+	}
+
+	if !found {
+		appendme := []*labels.Matcher{{
 			Type:  processedLabelInfo.Type,
 			Name:  tenantLabelName,
 			Value: processedLabelInfo.Value,
-		}
-
-		found := false
-		matchers := matcherExpr.Matchers()
-		for idx, matcher := range matchers {
-			if matcher.Name == tenantLabelName {
-				matchers[idx] = newmatcher
-				found = true
-			}
-		}
-
-		if !found {
-			appendme := []*labels.Matcher{{
-				Type:  processedLabelInfo.Type,
-				Name:  tenantLabelName,
-				Value: processedLabelInfo.Value,
-			}}
-			matcherExpr.AppendMatchers(appendme)
-		}
-	})
+		}}
+		matcherExpr.AppendMatchers(appendme)
+	}
 }

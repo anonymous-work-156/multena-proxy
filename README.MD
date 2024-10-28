@@ -15,15 +15,17 @@ right users.
 
 # Forked
 
-This is a fork to meet some internal requirements, see the [upstream repo](https://github.com/gepaplexx/multena-proxy) for a proper world view.
+This is a fork to meet some (expanding) internal requirements, see the [upstream repo](https://github.com/gepaplexx/multena-proxy) for a proper world view.
 
 Our changes (at the time of this writing) are basically:
 1.  Configure the HTTP header in which the JWT arrives
 2.  Allow the HTTP header value to not start with "BEARER"
 3.  Configure the sub-paths at which Loki and Promethues are proxied
-4.  Support the four operators `==`, `!=`, `=~` and `!~` for tenant labels
-5.  Support arbitrary regex syntax for tenant label values
-6.  Configure the behavior when an illegal or non-matching tenant label value is specified (error vs match empty string)
-7.  Extended test cases
-8.  Rename some variables
-9.  Rephrase some error messages
+4.  Support the four operators `==`, `!=`, `=~` and `!~` for tenant labels (including regex syntax)
+5.  Allow different tenant label matchers in different selectors in the same query
+6.  Configure the behavior when an illegal or non-matching tenant label value is specified (error vs impossible match)
+7.  PromQL only: allow the tenant label to be an empty string (missing) for specially configured metrics
+8.  Extended test cases
+9.  Rephrase and reformat some error messages
+
+As time has passed, an notable percentage of the total code has been replaced.

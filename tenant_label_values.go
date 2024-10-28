@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -17,10 +18,16 @@ func (c LabelValueInfo) String() string {
 	return fmt.Sprintf("LabelValueInfo(%v %v)", c.Type, c.Value)
 }
 
+var (
+	ErrUnauthorizedLabelValue = errors.New("unauthorized tenant label value")
+	ErrNoLabelMatch           = errors.New("no tenant label values matched")
+	ErrMultipleValOrOper      = errors.New("found multiple values or operators for tenant label")
+)
+
 // processLabelValues takes the tenant label operator and value that were found (if any) and creates a new operator and tenant label value from them.
 // The new operator and value may be the same, or they may reflect simplifications from evaluating the operator and value in context of the allowed values.
-// An error can be returned (depending on errorOnIllegalTenantValue) if the tenant label value is illegal or matches nothing.
-func processLabelValues(extractedLabelInfo *LabelValueInfo, allowedTenantLabelValues []string, errorOnIllegalTenantValue bool) (*LabelValueInfo, error) {
+// An error will be returned if the tenant label value is illegal or matches nothing.
+func processLabelValues(extractedLabelInfo *LabelValueInfo, allowedTenantLabelValues []string) (*LabelValueInfo, error) {
 
 	// when no tenant label has been provided by the client
 	if extractedLabelInfo == nil {
@@ -40,8 +47,8 @@ func processLabelValues(extractedLabelInfo *LabelValueInfo, allowedTenantLabelVa
 		// equal one of the allowed values
 		if slices.Contains(allowedTenantLabelValues, extractedLabelInfo.Value) {
 			return extractedLabelInfo, nil
-		} else if errorOnIllegalTenantValue {
-			return nil, fmt.Errorf("unauthorized tenant label value %s", extractedLabelInfo.Value)
+		} else {
+			return nil, ErrUnauthorizedLabelValue
 		}
 	} else {
 
@@ -69,8 +76,7 @@ func processLabelValues(extractedLabelInfo *LabelValueInfo, allowedTenantLabelVa
 				// whatever of the values do not match the regex
 				want = false
 			} else {
-				// FIXME: this is probably not the proper way to handle the situation
-				return nil, fmt.Errorf("unsupported operator")
+				panic("unsupported operator")
 			}
 
 			for _, val := range allowedTenantLabelValues {
@@ -91,10 +97,5 @@ func processLabelValues(extractedLabelInfo *LabelValueInfo, allowedTenantLabelVa
 		}
 	}
 
-	if errorOnIllegalTenantValue {
-		return nil, fmt.Errorf("no tenant label values matched")
-	}
-
-	// zero matches requires matching the empty string
-	return &LabelValueInfo{"", labels.MatchEqual}, nil
+	return nil, ErrNoLabelMatch
 }
