@@ -64,23 +64,28 @@ func parseJwtToken(tokenString string, a *App) (OAuthToken, *jwt.Token, error) {
 		return oAuthToken, nil, err
 	}
 
+	// usernames can optionally be pointed at approved tenant label values in the configuration
 	if v, ok := claimsMap["preferred_username"].(string); ok {
-		log.Debug().Msg("Found value for preferred_username in token")
+		log.Debug().Str("username", v).Msg("Found value for preferred_username in token")
 		oAuthToken.PreferredUsername = v
 	} else {
 		log.Warn().Msg("Failed to find value for preferred_username in token")
 	}
+
+	// we don't actually use the email for anything currently, but it could be treated like a username
 	if v, ok := claimsMap["email"].(string); ok {
+		log.Debug().Str("email", v).Msg("Found value for email in token")
 		oAuthToken.Email = v
 	}
 
+	// groups can optionally be pointed at approved tenant label values in the configuraion
 	if v, ok := claimsMap[a.Cfg.Web.OAuthGroupName].([]interface{}); ok {
-		log.Debug().Msg("Found value for group in token")
 		for _, item := range v {
 			if s, ok := item.(string); ok {
 				oAuthToken.Groups = append(oAuthToken.Groups, s)
 			}
 		}
+		log.Debug().Str("groups", strings.Join(oAuthToken.Groups, ",")).Msg("Found value for group in token")
 	} else {
 		log.Warn().Msg("Failed to find value for group in token")
 	}
@@ -89,7 +94,7 @@ func parseJwtToken(tokenString string, a *App) (OAuthToken, *jwt.Token, error) {
 
 // validateLabels validates the labels in the OAuth token.
 // It checks if the user is an admin and skips label enforcement if true.
-// Returns a map representing valid labels, a boolean indicating whether label enforcement should be skipped,
+// Returns a list of valid values for the tenant label, a boolean indicating whether label enforcement should be skipped,
 // and any error that occurred during validation.
 func validateLabels(token OAuthToken, a *App) ([]string, bool, error) {
 	if isAdmin(token, a) {
@@ -105,7 +110,7 @@ func validateLabels(token OAuthToken, a *App) ([]string, bool, error) {
 	log.Debug().Str("user", token.PreferredUsername).Strs("labels", tenantLabels).Msg("")
 
 	if len(tenantLabels) < 1 {
-		return nil, false, fmt.Errorf("no tenant labels are configured for the user")
+		return nil, false, fmt.Errorf("no tenant labels are configured for the user") // FIXME: this error is badly formatted, and sometimes unhelpful
 	}
 	return tenantLabels, false, nil
 }
