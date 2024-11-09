@@ -188,6 +188,16 @@ func Test_promqlEnforcer(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "2 of 2, odd query",
+			args: args{
+				query:                     "count(count({__name__!=\"\"}) by (__name__))",
+				allowedTenantLabelValues:  []string{"namespace1", "namespace2"},
+				errorOnIllegalTenantValue: false,
+			},
+			want:    []string{"count(count by (__name__) ({__name__!=\"\",namespace=~\"namespace1|namespace2\"}))"},
+			wantErr: false,
+		},
+		{
 			name: "2 of 2",
 			args: args{
 				query:                     "up{namespace=~\"namespace1|namespace2\"}",
