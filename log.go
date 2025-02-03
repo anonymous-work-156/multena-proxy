@@ -65,7 +65,7 @@ func logRequestData(r *http.Request, bodyBytes []byte, logToken bool) {
 		log.Error().Err(err).Msg("Error while marshalling request")
 		return
 	}
-	log.Debug().Str("verb", r.Method).Str("request", string(jsonData)).Str("path", r.URL.Path).Msg("")
+	log.Trace().Str("verb", r.Method).Str("request", string(jsonData)).Str("path", r.URL.Path).Msg("")
 }
 
 // cleanSensitiveHeaders creates and returns a copy of the provided HTTP headers with sensitive headers removed.
