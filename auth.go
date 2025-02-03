@@ -41,6 +41,7 @@ func getToken(r *http.Request, a *App) (OAuthToken, error) {
 func trimBearerToken(r *http.Request, header_name string) (string, error) {
 	authToken := r.Header.Get(header_name)
 	if authToken == "" {
+		log.Info().Str("header name involved in error", header_name).Msg("") // help illuminate broken configuration
 		return "", fmt.Errorf("got no value for the HTTP header which is expected to contain the JWT")
 	}
 	if header_name == "Authorization" {
@@ -98,13 +99,13 @@ func parseJwtToken(tokenString string, a *App) (OAuthToken, *jwt.Token, error) {
 // and any error that occurred during validation.
 func validateLabels(token OAuthToken, a *App) ([]string, bool, error) {
 	if isAdmin(token, a) {
-		log.Debug().Str("user", token.PreferredUsername).Bool("Admin", true).Msg("Skipping label enforcement")
+		log.Debug().Str("user", token.PreferredUsername).Bool("Admin", true).Msg("Skipping label enforcement (due to admin group membership)")
 		return nil, true, nil
 	}
 
 	tenantLabels, skip := a.LabelStore.GetLabels(token, a)
 	if skip {
-		log.Debug().Str("user", token.PreferredUsername).Bool("Admin", false).Msg("Skipping label enforcement")
+		log.Debug().Str("user", token.PreferredUsername).Bool("Admin", false).Msg("Skipping label enforcement (due to label configuration)")
 		return nil, true, nil
 	}
 	log.Debug().Str("user", token.PreferredUsername).Strs("labels", tenantLabels).Msg("")

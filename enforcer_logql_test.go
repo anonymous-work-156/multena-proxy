@@ -8,6 +8,10 @@ import (
 )
 
 func TestLogqlEnforcer(t *testing.T) {
+
+	log.Info().Caller().Msg("Start TestLogqlEnforcer().")
+	defer log.Info().Msg("End TestLogqlEnforcer().")
+
 	type args struct {
 		query                     string
 		allowedTenantLabelValues  []string

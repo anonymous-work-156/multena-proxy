@@ -170,6 +170,10 @@ func setupTestMain() (App, App, App, map[string]string) {
 }
 
 func Test_reverseProxy(t *testing.T) {
+
+	log.Info().Caller().Msg("Start Test_reverseProxy().")
+	defer log.Info().Msg("End Test_reverseProxy().")
+
 	app, app_with_error_on_illegal_tenant, app_with_admin, tokens := setupTestMain()
 
 	cases := []struct {
@@ -214,7 +218,7 @@ func Test_reverseProxy(t *testing.T) {
 			app:            &app,
 		},
 		{
-			name:           "malformed header 3",
+			name:           "malformed header 4",
 			expectedStatus: http.StatusForbidden,
 			URL:            "/api/v1/query_range",
 			authorization:  "Bearer abc def",
