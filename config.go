@@ -28,7 +28,6 @@ type Config struct {
 		Host                string `mapstructure:"host"`
 		TLSVerifySkip       bool   `mapstructure:"tls_verify_skip"`
 		TrustedRootCaPath   string `mapstructure:"trusted_root_ca_path"`
-		LabelStoreKind      string `mapstructure:"label_store_kind"`
 		JwksCertURL         string `mapstructure:"jwks_cert_url"`
 		OAuthGroupName      string `mapstructure:"oauth_group_name"` // the token claim field name in which to find group membership
 		ServiceAccountToken string `mapstructure:"service_account_token"`
@@ -36,10 +35,12 @@ type Config struct {
 	} `mapstructure:"web"`
 
 	Admin struct {
+		LabelStoreKind   string `mapstructure:"label_store_kind"`   // choose: configmap, mysql
+		LabelStoreFile   string `mapstructure:"label_store_file"`   // base name of label config file (ignored with label_store_kind: mysql)
 		GroupBypass      bool   `mapstructure:"group_bypass"`       // enable or disable admin group bypass
 		Group            string `mapstructure:"group"`              // the name of the admin group
-		MagicValueBypass bool   `mapstructure:"magic_value_bypass"` // enable or disable magic value bypass
-		MagicValue       string `mapstructure:"magic_value"`        // the magic value which bypasses checks
+		MagicValueBypass bool   `mapstructure:"magic_value_bypass"` // enable or disable magic value bypass (ignored with nested configmap structure)
+		MagicValue       string `mapstructure:"magic_value"`        // the magic value which bypasses checks (ignored with nested configmap structure)
 	} `mapstructure:"admin"`
 
 	Dev struct {
@@ -83,20 +84,22 @@ type Config struct {
 }
 
 func (a *App) WithConfig() *App {
-	v := viper.NewWithOptions(viper.KeyDelimiter("::"))
+	v := viper.New()
 	v.SetConfigName("config")
 	v.SetConfigType("yaml")
-	v.AddConfigPath("/etc/config/config/") // mount ConfigMap here
-	v.AddConfigPath("./configs")
-	err := v.MergeInConfig()
-	if err != nil {
-		return nil
-	}
+	v.AddConfigPath("/etc/config/config/") // expected to be here deployed in a pod (mounted ConfigMap)
+	v.AddConfigPath("./configs")           // expected to be here for test cases
+
 	a.Cfg = &Config{}
+	err := v.MergeInConfig() // unclear why, but it is essential to get actual values loaded into the struct
+	if err != nil {
+		log.Fatal().Err(err).Msg("Error while unmarshalling config file")
+	}
 	err = v.Unmarshal(a.Cfg)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Error while unmarshalling config file")
 	}
+
 	v.OnConfigChange(func(e fsnotify.Event) {
 		log.Info().Str("file", e.Name).Msg("Config file changed")
 		err := v.Unmarshal(a.Cfg)
@@ -104,11 +107,13 @@ func (a *App) WithConfig() *App {
 			log.Error().Err(err).Msg("Error while unmarshalling config file")
 			a.healthy = false
 		}
+		log.Info().Msg("Config is reloaded.")
 		zerolog.SetGlobalLevel(zerolog.Level(a.Cfg.Log.Level))
 	})
 	v.WatchConfig()
 	zerolog.SetGlobalLevel(zerolog.Level(a.Cfg.Log.Level))
-	log.Debug().Any("config", a.Cfg).Msg("")
+	log.Info().Msg("Config is loaded.")
+	log.Debug().Any("config", a.Cfg).Msg("") // a.Cfg.Thanos.MetricsTenantOptional can be quite long
 	return a
 }
 

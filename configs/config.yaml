@@ -8,16 +8,17 @@ web:
   host: localhost # host to listen on
   tls_verify_skip: true # skip tls verification very insecurely!!!
   trusted_root_ca_path: "./certs/" # path to trusted root ca
-  label_store_kind: "configmap" # label provider either configmap or mysql
   jwks_cert_url: https://sso.example.com/realms/internal/protocol/openid-connect/certs # url to jwks cert of oauth provider
   oauth_group_name: "groups" # name of the group field in the jwt
   header_containing_jwt: Authorization
 
 admin:
-  group_bypass: true           # enable or disable admin group bypass
-  group: ""                    # the name of the admin group
-  magic_value_bypass: false    # enable or disable magic value bypass
-  magic_value: "#cluster-wide" # the magic value which bypasses checks
+  label_store_kind: configmap   # choose: configmap, mysql
+  label_store_file: labels      # base name of label config file (ignored with label_store_kind: mysql)
+  group_bypass: false           # enable or disable admin group bypass
+  group: ""                     # the name of the admin group
+  magic_value_bypass: false     # enable or disable magic value bypass (ignored with nested configmap structure)
+  magic_value: ""               # the magic value which bypasses checks (ignored with nested configmap structure)
 
 dev:
   enabled: false # enable dev mode, but dont use in production

@@ -1,0 +1,14 @@
+group1:
+  '#cluster-wide': true # this grants the group to skip enforcement (depending on other config)
+user1:
+  hogarama: true        # single namespace
+User2:
+  bob: true             # single namespace, with uppercase
+user3:
+  grafana: true         # multi namespace
+  opernshift-logging: true
+  opernshift-monitoring: true
+group2:
+  grafana: true         # multi namespace
+  opernshift-logging: true
+  opernshift-monitoring: true

@@ -1,0 +1,20 @@
+admins:
+  - group0
+  - group00
+solutions:
+  - name: project1
+    filtervalues:
+      - val1
+      - val2
+    groups:
+      - user1
+      - group1
+      - group2
+  - name: project2
+    filtervalues:
+      - val1
+      - val3
+      - val4
+    groups:
+      - group1
+      - group3
