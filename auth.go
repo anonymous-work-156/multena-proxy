@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/rs/zerolog/log"
@@ -117,5 +118,5 @@ func validateLabels(token OAuthToken, a *App) ([]string, bool, error) {
 }
 
 func isAdmin(token OAuthToken, a *App) bool {
-	return ContainsIgnoreCase(token.Groups, a.Cfg.Admin.Group) && a.Cfg.Admin.GroupBypass
+	return slices.Contains[[]string, string](token.Groups, a.Cfg.Admin.Group)
 }

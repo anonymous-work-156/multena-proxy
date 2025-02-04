@@ -13,22 +13,18 @@ func TestGetLabelsCM(t *testing.T) {
 	defer log.Info().Msg("End TestGetLabelsCM().")
 
 	// linear (original) CM format
-	// config keys that are ingested through the Viper lib will be lower case
-	// if we set upper case directly in this test, it will not represent real world
 	configMapLinear := ConfigMapHandler{
 		labels: map[string]map[string]bool{
 			"user1":      {"lu1": true, "lu2": true},
 			"user2":      {"lu3": true, "lu4": true},
 			"group1":     {"lg1": true, "lg2": true},
 			"group2":     {"lg2": true, "lg3": true, "lg4": true},
-			"admingroup": {"#cluster-wide": true, "lg4": true},
+			"adminGroup": {"#cluster-wide": true, "lg4": true},
 		},
 		nestedLabels: nil,
 	}
 
 	// nested (new) CM format
-	// as with the original "linear" CM format, keys are case-insensitive
-	// NOTE: the user and group names are *not* stored in the keys for the "nested" CM format, so they are *case-sensitive*
 	configMapNested := ConfigMapHandler{
 		labels: map[string]map[string]bool{},
 		nestedLabels: &NestedLabelConfig{
@@ -155,10 +151,10 @@ func TestGetLabelsLinearCM(t *testing.T) {
 		skip     bool
 	}{
 		{
-			name:     "user_being_downcased",
-			username: "user2", // uppercase in the file on disk (a CM on Kubernetes)
+			name:     "user_with_complex_name",
+			username: "User.With.Email.Format@and_underscores", // caps and funny chars that caused confusion for the viper config system (RIP)
 			groups:   []string{},
-			expected: []string{"bob"},
+			expected: []string{"helloworld"},
 		},
 		{
 			name:     "unknown_user_with_ok_group",
@@ -202,8 +198,6 @@ func TestGetLabelsLinearCM(t *testing.T) {
 	app.Cfg.Admin.MagicValue = "#cluster-wide" // needs to match value in the file we load from disk
 
 	// linear (original) CM format
-	// config keys that are ingested through the Viper lib will be lower case
-	// if we set upper case directly in this test, it will not represent real world
 	configMapLinear := ConfigMapHandler{}
 	configMapLinear.Connect(*app)
 

@@ -7,10 +7,9 @@ import (
 	"strings"
 
 	"github.com/rs/zerolog/log"
+	"gopkg.in/yaml.v2"
 
-	"github.com/fsnotify/fsnotify"
 	"github.com/go-sql-driver/mysql"
-	"github.com/spf13/viper"
 )
 
 // Labelstore represents an interface defining methods for connecting to a
@@ -61,36 +60,31 @@ type ConfigMapHandler struct {
 }
 
 func (c *ConfigMapHandler) Connect(a App) error {
-	v := viper.New()
-	v.SetConfigName(a.Cfg.Admin.LabelStoreFile)
-	v.SetConfigType("yaml")
-	v.AddConfigPath("/etc/config/labels/") // expected to be here deployed in a pod (mounted ConfigMap)
-	v.AddConfigPath("./configs")           // expected to be here for test cases
-
-	err := v.MergeInConfig() // unclear why, but it is essential to get actual values loaded into the struct
-	if err != nil {
-		log.Fatal().Err(err).Msg("Error while unmarshalling label config file")
+	yamlFile, err := tryReadFile("/etc/config/labels/" + a.Cfg.Admin.LabelStoreFile + ".yaml") // expected to be here deployed in a pod (mounted ConfigMap)
+	if err == nil {
+		log.Info().Msg("Read label config file at first potential path.")
+	} else {
+		yamlFile, err = tryReadFile("./configs/" + a.Cfg.Admin.LabelStoreFile + ".yaml") // expected to be here for test cases
+		if err == nil {
+			log.Info().Msg("Read label config file at second potential path.")
+		} else {
+			log.Fatal().Err(err).Msg("Failed to read config file in second potential path.")
+		}
 	}
 
-	err = v.Unmarshal(&c.labels) // try the old 'linear' format
-	if err != nil {
+	err = yaml.Unmarshal(yamlFile, &c.labels) // expected to be here for test cases
+	if err == nil {
+		log.Info().Msg("Label config file parsed with linear format.")
+	} else {
 		c.nestedLabels = &NestedLabelConfig{}
-		err = v.Unmarshal(c.nestedLabels) // try the new 'nested' format
-		if err != nil {
-			log.Error().Err(err).Msg("Error while unmarshalling label config file")
-			return err
+		err = yaml.Unmarshal(yamlFile, c.nestedLabels) // expected to be here for test cases
+		if err == nil {
+			log.Info().Msg("Label config file parsed with nested format.")
+		} else {
+			log.Fatal().Err(err).Msg("Failed to parse config file.")
 		}
 	}
-	v.OnConfigChange(func(e fsnotify.Event) {
-		log.Info().Str("file", e.Name).Msg("Config file changed")
-		err = v.Unmarshal(&c.labels)
-		if err != nil {
-			log.Error().Err(err).Msg("Error while unmarshalling label config file")
-			return
-		}
-		log.Info().Msg("Label config is reloaded.")
-	})
-	v.WatchConfig()
+
 	log.Info().Msg("Label config is loaded.")
 	log.Debug().Any("config", c.labels).Msg("")
 	return nil
@@ -100,6 +94,8 @@ func (c *ConfigMapHandler) GetLabels(token OAuthToken, a *App) ([]string, bool) 
 	mergedValues := make(map[string]bool)
 
 	if c.nestedLabels != nil {
+
+		log.Debug().Msg("Nested label CM format.")
 
 		// search for our username or any of our groups in the list of admin users/groups
 		for _, entityName := range c.nestedLabels.Admins {
@@ -124,6 +120,7 @@ func (c *ConfigMapHandler) GetLabels(token OAuthToken, a *App) ([]string, bool) 
 				if comparisonGroup == token.PreferredUsername {
 					// having found a user match, we grab all the label values and proceed to the next 'solution'
 					for _, filterVal := range solution.FilterValues {
+						log.Trace().Str("label value", filterVal).Msg("Keep label value.")
 						mergedValues[filterVal] = true
 					}
 					break startSolution
@@ -133,6 +130,7 @@ func (c *ConfigMapHandler) GetLabels(token OAuthToken, a *App) ([]string, bool) 
 					if comparisonGroup == group {
 						// having found a group match, we grab all the label values and proceed to the next 'solution'
 						for _, filterVal := range solution.FilterValues {
+							log.Trace().Str("label value", filterVal).Msg("Keep label value.")
 							mergedValues[filterVal] = true
 						}
 						break startSolution
@@ -141,13 +139,14 @@ func (c *ConfigMapHandler) GetLabels(token OAuthToken, a *App) ([]string, bool) 
 			}
 		}
 	} else {
-		// NOTE: the config system (Viper) is case-insensitive for keys, which appears to mean it returns lower-case
-		// therefore when looking for our user or group(s), which are stored as keys, we downcase them
+		log.Debug().Msg("Linear label CM format.")
 
-		for k, v := range c.labels[strings.ToLower(token.PreferredUsername)] {
+		for k, v := range c.labels[token.PreferredUsername] {
 			if !v {
+				log.Trace().Str("label value", k).Msg("Ignore label value because it is marked as false-ey.")
 				continue // pointing a key at false is the same as not including the key at all
 			}
+			log.Trace().Str("label value", k).Msg("Keep label value.")
 			mergedValues[k] = true
 			if a != nil && a.Cfg.Admin.MagicValueBypass && k == a.Cfg.Admin.MagicValue {
 				return nil, true
@@ -155,10 +154,12 @@ func (c *ConfigMapHandler) GetLabels(token OAuthToken, a *App) ([]string, bool) 
 		}
 
 		for _, group := range token.Groups {
-			for k, v := range c.labels[strings.ToLower(group)] {
+			for k, v := range c.labels[group] {
 				if !v {
+					log.Trace().Str("label value", k).Msg("Ignore label value because it is marked as false-ey.")
 					continue // pointing a key at false is the same as not including the key at all
 				}
+				log.Trace().Str("label value", k).Msg("Keep label value.")
 				mergedValues[k] = true
 				if a != nil && a.Cfg.Admin.MagicValueBypass && k == a.Cfg.Admin.MagicValue {
 					return nil, true
@@ -167,7 +168,7 @@ func (c *ConfigMapHandler) GetLabels(token OAuthToken, a *App) ([]string, bool) 
 		}
 	}
 
-	return MapKeysToArray(mergedValues), false
+	return mapKeysToArray(mergedValues), false
 }
 
 type MySQLHandler struct {
@@ -260,5 +261,5 @@ func (m *MySQLHandler) GetLabels(token OAuthToken, a *App) ([]string, bool) {
 		// the value being pointed at is not important
 		labels[label] = true
 	}
-	return MapKeysToArray(labels), false
+	return mapKeysToArray(labels), false
 }

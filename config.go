@@ -10,110 +10,100 @@ import (
 	"strings"
 
 	"github.com/MicahParks/keyfunc/v3"
-	"github.com/fsnotify/fsnotify"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-	"github.com/spf13/viper"
+	"gopkg.in/yaml.v2"
 )
 
 type Config struct {
 	Log struct {
-		Level     int  `mapstructure:"level"`
-		LogTokens bool `mapstructure:"log_tokens"`
-	} `mapstructure:"log"`
+		Level     int  `yaml:"level"`
+		LogTokens bool `yaml:"log_tokens"`
+	} `yaml:"log"`
 
 	Web struct {
-		ProxyPort           int    `mapstructure:"proxy_port"`   // where clients come to talk to us
-		MetricsPort         int    `mapstructure:"metrics_port"` // for Prometheus-like engine to scrape us
-		Host                string `mapstructure:"host"`
-		TLSVerifySkip       bool   `mapstructure:"tls_verify_skip"`
-		TrustedRootCaPath   string `mapstructure:"trusted_root_ca_path"`
-		JwksCertURL         string `mapstructure:"jwks_cert_url"`
-		OAuthGroupName      string `mapstructure:"oauth_group_name"` // the token claim field name in which to find group membership
-		ServiceAccountToken string `mapstructure:"service_account_token"`
-		HeaderContainingJWT string `mapstructure:"header_containing_jwt"`
-	} `mapstructure:"web"`
+		ProxyPort           int    `yaml:"proxy_port"`   // where clients come to talk to us
+		MetricsPort         int    `yaml:"metrics_port"` // for Prometheus-like engine to scrape us
+		Host                string `yaml:"host"`
+		TLSVerifySkip       bool   `yaml:"tls_verify_skip"`
+		TrustedRootCaPath   string `yaml:"trusted_root_ca_path"`
+		JwksCertURL         string `yaml:"jwks_cert_url"`
+		OAuthGroupName      string `yaml:"oauth_group_name"` // the token claim field name in which to find group membership
+		ServiceAccountToken string `yaml:"service_account_token"`
+		HeaderContainingJWT string `yaml:"header_containing_jwt"`
+	} `yaml:"web"`
 
 	Admin struct {
-		LabelStoreKind   string `mapstructure:"label_store_kind"`   // choose: configmap, mysql
-		LabelStoreFile   string `mapstructure:"label_store_file"`   // base name of label config file (ignored with label_store_kind: mysql)
-		GroupBypass      bool   `mapstructure:"group_bypass"`       // enable or disable admin group bypass
-		Group            string `mapstructure:"group"`              // the name of the admin group
-		MagicValueBypass bool   `mapstructure:"magic_value_bypass"` // enable or disable magic value bypass (ignored with nested configmap structure)
-		MagicValue       string `mapstructure:"magic_value"`        // the magic value which bypasses checks (ignored with nested configmap structure)
-	} `mapstructure:"admin"`
+		LabelStoreKind   string `yaml:"label_store_kind"`   // choose: configmap, mysql
+		LabelStoreFile   string `yaml:"label_store_file"`   // base name of label config file (ignored with label_store_kind: mysql)
+		GroupBypass      bool   `yaml:"group_bypass"`       // enable or disable admin group bypass
+		Group            string `yaml:"group"`              // the name of the admin group
+		MagicValueBypass bool   `yaml:"magic_value_bypass"` // enable or disable magic value bypass (ignored with nested configmap structure)
+		MagicValue       string `yaml:"magic_value"`        // the magic value which bypasses checks (ignored with nested configmap structure)
+	} `yaml:"admin"`
 
 	Dev struct {
-		Enabled  bool   `mapstructure:"enabled"`
-		Username string `mapstructure:"username"`
-	} `mapstructure:"dev"`
+		Enabled  bool   `yaml:"enabled"`
+		Username string `yaml:"username"`
+	} `yaml:"dev"`
 
 	Db struct {
-		Enabled      bool   `mapstructure:"enabled"`
-		User         string `mapstructure:"user"`
-		PasswordPath string `mapstructure:"password_path"`
-		Host         string `mapstructure:"host"`
-		Port         int    `mapstructure:"port"`
-		DbName       string `mapstructure:"dbName"`
-		Query        string `mapstructure:"query"`
-		TokenKey     string `mapstructure:"token_key"`
-	} `mapstructure:"db"`
+		Enabled      bool   `yaml:"enabled"`
+		User         string `yaml:"user"`
+		PasswordPath string `yaml:"password_path"`
+		Host         string `yaml:"host"`
+		Port         int    `yaml:"port"`
+		DbName       string `yaml:"dbName"`
+		Query        string `yaml:"query"`
+		TokenKey     string `yaml:"token_key"`
+	} `yaml:"db"`
 
 	Thanos struct {
-		PathPrefix                string            `mapstructure:"path_prefix"`  // the path where this service will be offered
-		URL                       string            `mapstructure:"url"`          // the service we proxy traffic to
-		TenantLabel               string            `mapstructure:"tenant_label"` // the label to enforce values of
-		ErrorOnIllegalTenantValue bool              `mapstructure:"error_on_illegal_tenant_value"`
-		UseMutualTLS              bool              `mapstructure:"use_mutual_tls"`
-		Cert                      string            `mapstructure:"cert"`
-		Key                       string            `mapstructure:"key"`
-		Headers                   map[string]string `mapstructure:"headers"`
-		MetricsTenantOptional     []string          `mapstructure:"metrics_tenant_optional"` // metrics for which its OK to have no tenant label
-	} `mapstructure:"thanos"`
+		PathPrefix                string            `yaml:"path_prefix"`  // the path where this service will be offered
+		URL                       string            `yaml:"url"`          // the service we proxy traffic to
+		TenantLabel               string            `yaml:"tenant_label"` // the label to enforce values of
+		ErrorOnIllegalTenantValue bool              `yaml:"error_on_illegal_tenant_value"`
+		UseMutualTLS              bool              `yaml:"use_mutual_tls"`
+		Cert                      string            `yaml:"cert"`
+		Key                       string            `yaml:"key"`
+		Headers                   map[string]string `yaml:"headers"`
+		MetricsTenantOptional     []string          `yaml:"metrics_tenant_optional"` // metrics for which its OK to have no tenant label
+	} `yaml:"thanos"`
 
 	Loki struct {
-		PathPrefix                string            `mapstructure:"path_prefix"`  // the path where this service will be offered
-		URL                       string            `mapstructure:"url"`          // the service we proxy traffic to
-		TenantLabel               string            `mapstructure:"tenant_label"` // the label to enforce values of
-		ErrorOnIllegalTenantValue bool              `mapstructure:"error_on_illegal_tenant_value"`
-		UseMutualTLS              bool              `mapstructure:"use_mutual_tls"`
-		Cert                      string            `mapstructure:"cert"`
-		Key                       string            `mapstructure:"key"`
-		Headers                   map[string]string `mapstructure:"headers"`
-	} `mapstructure:"loki"`
+		PathPrefix                string            `yaml:"path_prefix"`  // the path where this service will be offered
+		URL                       string            `yaml:"url"`          // the service we proxy traffic to
+		TenantLabel               string            `yaml:"tenant_label"` // the label to enforce values of
+		ErrorOnIllegalTenantValue bool              `yaml:"error_on_illegal_tenant_value"`
+		UseMutualTLS              bool              `yaml:"use_mutual_tls"`
+		Cert                      string            `yaml:"cert"`
+		Key                       string            `yaml:"key"`
+		Headers                   map[string]string `yaml:"headers"`
+	} `yaml:"loki"`
 }
 
 func (a *App) WithConfig() *App {
-	v := viper.New()
-	v.SetConfigName("config")
-	v.SetConfigType("yaml")
-	v.AddConfigPath("/etc/config/config/") // expected to be here deployed in a pod (mounted ConfigMap)
-	v.AddConfigPath("./configs")           // expected to be here for test cases
+	yamlFile, err := tryReadFile("/etc/config/config/config.yaml") // expected to be here deployed in a pod (mounted ConfigMap)
+	if err == nil {
+		log.Info().Msg("Read config file at first potential path.")
+	} else {
+		yamlFile, err = tryReadFile("./configs/config.yaml") // expected to be here for test cases
+		if err == nil {
+			log.Info().Msg("Read config file at second potential path.")
+		} else {
+			log.Fatal().Err(err).Msg("Failed to read config file in second potential path.")
+		}
+	}
 
 	a.Cfg = &Config{}
-	err := v.MergeInConfig() // unclear why, but it is essential to get actual values loaded into the struct
+	err = yaml.Unmarshal(yamlFile, a.Cfg)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Error while unmarshalling config file")
-	}
-	err = v.Unmarshal(a.Cfg)
-	if err != nil {
-		log.Fatal().Err(err).Msg("Error while unmarshalling config file")
+		log.Fatal().Err(err).Msg("Failed to parse config file.")
 	}
 
-	v.OnConfigChange(func(e fsnotify.Event) {
-		log.Info().Str("file", e.Name).Msg("Config file changed")
-		err := v.Unmarshal(a.Cfg)
-		if err != nil {
-			log.Error().Err(err).Msg("Error while unmarshalling config file")
-			a.healthy = false
-		}
-		log.Info().Msg("Config is reloaded.")
-		zerolog.SetGlobalLevel(zerolog.Level(a.Cfg.Log.Level))
-	})
-	v.WatchConfig()
 	zerolog.SetGlobalLevel(zerolog.Level(a.Cfg.Log.Level))
 	log.Info().Msg("Config is loaded.")
-	log.Debug().Any("config", a.Cfg).Msg("") // a.Cfg.Thanos.MetricsTenantOptional can be quite long
+	log.Info().Any("config", a.Cfg).Msg("") // a.Cfg.Thanos.MetricsTenantOptional can be quite long
 	return a
 }
 
