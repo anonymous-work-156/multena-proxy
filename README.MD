@@ -1,4 +1,4 @@
-# Multena Proxy
+# Multena Proxy (forked)
 
 Making the LGTM-Stack **mul**ti **tena**ncy ready.
 
@@ -25,7 +25,8 @@ Our changes (at the time of this writing) are basically:
 5.  Allow different tenant label matchers in different selectors in the same query
 6.  Configure the behavior when an illegal or non-matching tenant label value is specified (error vs impossible match)
 7.  PromQL only: allow the tenant label to be an empty string (missing) for specially configured metrics
-8.  Extended test cases
-9.  Rephrase and reformat some error messages
+8.  New label config CM format (in addition to the old one)
+9.  Extended test cases
+10. Rephrase and reformat some error messages
 
 As time has passed, an notable percentage of the total code has been replaced.
