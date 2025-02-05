@@ -3,7 +3,7 @@ admins:
   - group00
 solutions:
   - name: project1
-    filtervalues:
+    filter:
       - val1
       - val2
     groups:
@@ -11,7 +11,7 @@ solutions:
       - group1
       - group2
   - name: project2
-    filtervalues:
+    filter:
       - val1
       - val3
       - val4

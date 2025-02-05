@@ -45,7 +45,7 @@ func (a *App) WithLabelStore() *App {
 
 type InnerNestedLabelConfig struct {
 	Name         string   `yaml:"name"`
-	FilterValues []string `yaml:"filtervalues"`
+	FilterValues []string `yaml:"filter"`
 	Groups       []string `yaml:"groups"`
 }
 
