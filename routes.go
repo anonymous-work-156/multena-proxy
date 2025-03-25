@@ -47,6 +47,7 @@ func (a *App) WithRoutes() *App {
 	a.e = e
 	a.WithLoki()
 	a.WithThanos()
+	e.PathPrefix("/").Handler(logEverythingElseHandler{}) // hackish way to help all requests get logged
 	return a
 }
 

@@ -57,6 +57,7 @@ func main() {
 // StartServer starts the HTTP server for the proxy and metrics.
 func (a *App) StartServer() {
 	go func() {
+		// serve metrics (to be scraped prom-style)
 		if err := http.ListenAndServe(fmt.Sprintf("%s:%d", a.Cfg.Web.Host, a.Cfg.Web.MetricsPort), a.i); err != nil {
 			log.Fatal().Err(err).Msg("Error while serving metrics")
 		}
@@ -68,6 +69,7 @@ func (a *App) StartServer() {
 			Service:  "multena",
 		})
 
+		// serve our proxy
 		if err := http.ListenAndServe(fmt.Sprintf("%s:%d", a.Cfg.Web.Host, a.Cfg.Web.ProxyPort), std.Handler("/", mdlw, a.e)); err != nil {
 			log.Fatal().Err(err).Msg("Error while serving proxy")
 		}

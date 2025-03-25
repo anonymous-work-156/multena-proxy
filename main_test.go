@@ -186,6 +186,13 @@ func Test_reverseProxy(t *testing.T) {
 		app                *App
 	}{
 		{
+			name:           "wrong path",
+			expectedStatus: http.StatusNotFound,
+			URL:            "/foo/bar",
+			expectedBody:   "not a registered route\n", // we hope to hit our logEverythingElseHandler
+			app:            &app,
+		},
+		{
 			name:               "missing header",
 			expectedStatus:     http.StatusForbidden,
 			noSetAuthorization: true,

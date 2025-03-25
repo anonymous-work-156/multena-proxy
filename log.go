@@ -10,6 +10,16 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// logEverythingElseHandler implements the http.Handler interface, so we can use it to observe HTTP requests.
+// Registering something (this handler) for the / path triggered the loggingMiddleware to log these requests.
+// When only the "business" routes where registered, requests to invalid paths were invisible in the logs and therefore hard to understand.
+type logEverythingElseHandler struct{}
+
+func (h logEverythingElseHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotFound)
+	w.Write([]byte("not a registered route\n")) // this distinctive text at least allows us to know we hit this handler (there is a test case)
+}
+
 type requestData struct {
 	Method string      `json:"method"`
 	URL    string      `json:"url"`
@@ -31,7 +41,10 @@ func (a *App) loggingMiddleware(next http.Handler) http.Handler {
 		// log.Trace().Any("Request", r.Headers).Msg("")
 		logRequestData(r, bodyBytes, a.Cfg.Log.LogTokens)
 		next.ServeHTTP(w, r)
-		log.Debug().Str("path", r.URL.Path).Msg("Request complete")
+
+		// crude request logging
+		// at this point r.Response == nil so we can't ask about the result with this approach
+		log.Info().Str("request URI", r.RequestURI).Str("request method", r.Method).Int64("content length", r.ContentLength).Msg("Request complete")
 	})
 }
 
