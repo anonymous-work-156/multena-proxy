@@ -27,7 +27,7 @@ func genJWKS(username, email string, groups []string, pk *ecdsa.PrivateKey) (str
 	return token.SignedString(pk)
 }
 
-func makeTestApp(jwksServer, upstreamServer *httptest.Server, errorOnIllegalTenantValue bool, magicValueBypass bool) App {
+func makeTestApp(jwksServer, upstreamServer *httptest.Server, errorOnIllegalTenantValue bool, adminGroup bool, magicValueBypass bool, headerBypass bool) App {
 	app := App{}
 	app.WithConfig()
 	app.Cfg.Web.JwksCertURL = jwksServer.URL
@@ -35,21 +35,36 @@ func makeTestApp(jwksServer, upstreamServer *httptest.Server, errorOnIllegalTena
 
 	app.Cfg.Thanos.URL = upstreamServer.URL
 	app.Cfg.Loki.URL = upstreamServer.URL
-	app.Cfg.Thanos.TenantLabel = "tenant_id"
+	app.Cfg.Thanos.TenantLabel = "tenant_id" // this is the label (query filter key) that has meaning for test cases
 	app.Cfg.Thanos.ErrorOnIllegalTenantValue = errorOnIllegalTenantValue
-	app.Cfg.Loki.TenantLabel = "tenant_id"
+	app.Cfg.Loki.TenantLabel = "tenant_id" // this is the label (query filter key) that has meaning for test cases
 	app.Cfg.Loki.ErrorOnIllegalTenantValue = errorOnIllegalTenantValue
+
+	app.Cfg.Admin.GroupBypass = adminGroup
+	if adminGroup {
+		app.Cfg.Admin.Group = "admingroupname" // admingroupname matches tenant defined in setupTestMain()
+	}
 
 	app.Cfg.Admin.MagicValueBypass = magicValueBypass
 	if magicValueBypass {
-		app.Cfg.Admin.MagicValue = "magicadminvalue"
+		app.Cfg.Admin.MagicValue = "<(magicadminvalue)>" // <(magicadminvalue)> matches tenant defined in setupTestMain()
 	}
 
+	app.Cfg.Admin.HeaderBypass = headerBypass
+	if headerBypass {
+		app.Cfg.Admin.Header.Key = "MAGICHEADER"
+		app.Cfg.Admin.Header.Value = "notaverygoodsecret"
+	}
+
+	// this is our config defining what tenant label values are valid for the test cases
+	// the tenant label name is set above (to "tenant_id")
+	// this is the linear (original) CM format, see labelstore_test.go for an inline example of each format
 	cmh := ConfigMapHandler{
 		labels: map[string]map[string]bool{
-			"user":   {"tenant_id_u1": true, "tenant_id_u2": true},
-			"group1": {"tenant_id_g1": true, "tenant_id_g2": true},
-			"group2": {"tenant_id_g3": true, "tenant_id_g4": true},
+			"valid-user":       {"tenant_id_u1": true, "tenant_id_u2": true},
+			"valid-user-magic": {"tenant_id_u1": true, "tenant_id_u2": true, "<(magicadminvalue)>": true},
+			"group1":           {"tenant_id_g1": true, "tenant_id_g2": true},
+			"group2":           {"tenant_id_g3": true, "tenant_id_g4": true},
 		},
 	}
 
@@ -59,7 +74,7 @@ func makeTestApp(jwksServer, upstreamServer *httptest.Server, errorOnIllegalTena
 	return app
 }
 
-func setupTestMain() (App, App, App, map[string]string) {
+func setupTestMain() (map[string]App, map[string]string) {
 	// Generate a new private key.
 	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -97,14 +112,20 @@ func setupTestMain() (App, App, App, map[string]string) {
 		Groups   []string
 	}{
 		{
-			name:     "noTenant",
+			name:     "invalidTenant",
 			Username: "not-a-valid-user",
 			Email:    "test-email",
 			Groups:   []string{},
 		},
 		{
+			name:     "invalidTenantWithGroups",
+			Username: "not-a-valid-user",
+			Email:    "test-email",
+			Groups:   []string{"invalid-group1", "invalid-group2"},
+		},
+		{
 			name:     "userTenant",
-			Username: "user",
+			Username: "valid-user", // defined as a valid user in CM in makeTestApp()
 			Email:    "test-email",
 			Groups:   []string{},
 		},
@@ -112,25 +133,37 @@ func setupTestMain() (App, App, App, map[string]string) {
 			name:     "groupTenant",
 			Username: "not-a-valid-user",
 			Email:    "test-email",
-			Groups:   []string{"group1"},
+			Groups:   []string{"group1"}, // defined as a valid group in CM in makeTestApp()
 		},
 		{
 			name:     "twoGroupsTenant",
 			Username: "not-a-valid-user",
 			Email:    "test-email",
-			Groups:   []string{"group1", "group2"},
+			Groups:   []string{"group1", "group2"}, // defined as two valid groups in CM in makeTestApp()
 		},
 		{
 			name:     "userAndGroupTenant",
-			Username: "user",
+			Username: "valid-user", // defined as a valid user in CM in makeTestApp()
 			Email:    "test-email",
-			Groups:   []string{"group1", "group2"},
+			Groups:   []string{"group1", "group2"}, // defined as two valid groups in CM in makeTestApp()
+		},
+		{
+			name:     "adminBypassTenant",
+			Username: "adminuser",
+			Email:    "test-email",
+			Groups:   []string{"admingroupname", "group1", "group2"}, // admingroupname matches group set in makeTestApp()
 		},
 		{
 			name:     "magicBypassTenant",
-			Username: "user",
+			Username: "valid-user-magic", // defined as a valid user in CM in makeTestApp() with magic value access
 			Email:    "test-email",
-			Groups:   []string{"magicadminvalue"},
+			Groups:   []string{"whatever", "something"},
+		},
+		{
+			name:     "invalidMagicBypassTenant",
+			Username: "invalid-user",
+			Email:    "test-email",
+			Groups:   []string{"<(magicadminvalue)>"}, // <(magicadminvalue)> matches value set in makeTestApp(), expected to not work here
 		},
 	}
 	tokens := make(map[string]string, len(jwks))
@@ -163,10 +196,13 @@ func setupTestMain() (App, App, App, map[string]string) {
 	}))
 	// defer upstreamServer.Close()
 
-	app1 := makeTestApp(jwksServer, upstreamServer, false, false)
-	app2 := makeTestApp(jwksServer, upstreamServer, true, false)
-	app3 := makeTestApp(jwksServer, upstreamServer, false, true)
-	return app1, app2, app3, tokens
+	appmap := map[string]App{
+		"bad_tenant_tolerant":   makeTestApp(jwksServer, upstreamServer, false, true, false, false),
+		"bad_tenant_intolerant": makeTestApp(jwksServer, upstreamServer, true, true, false, false),
+		"only_magic_val":        makeTestApp(jwksServer, upstreamServer, false, false, true, false),
+		"group_or_header":       makeTestApp(jwksServer, upstreamServer, false, true, false, true),
+	}
+	return appmap, tokens
 }
 
 func Test_reverseProxy(t *testing.T) {
@@ -174,249 +210,515 @@ func Test_reverseProxy(t *testing.T) {
 	log.Info().Caller().Msg("Start Test_reverseProxy().")
 	defer log.Info().Msg("End Test_reverseProxy().")
 
-	app, app_with_error_on_illegal_tenant, app_with_admin, tokens := setupTestMain()
+	appmap, tokens := setupTestMain()
 
-	cases := []struct {
-		name               string
-		noSetAuthorization bool
-		authorization      string
-		expectedStatus     int
-		expectedBody       string
-		URL                string
-		app                *App
-	}{
+	type ExpectedResult struct {
+		matchingApp string
+		status      int
+		body        string
+	}
+
+	type TestHeader struct {
+		key string
+		val string
+	}
+
+	type TestCase struct {
+		name                string
+		baseName            string
+		URL                 string
+		noSetAuthorization  bool
+		authorizationHeader string
+		header              TestHeader
+		expectedResults     []ExpectedResult
+	}
+
+	cases := []TestCase{
 		{
-			name:           "wrong path",
-			expectedStatus: http.StatusNotFound,
-			URL:            "/foo/bar",
-			expectedBody:   "not a registered route\n", // we hope to hit our logEverythingElseHandler
-			app:            &app,
+			baseName: "wrong_path",
+			URL:      "/foo/bar",
+			expectedResults: []ExpectedResult{{
+				matchingApp: "*",
+				status:      http.StatusNotFound,
+				body:        "not a registered route\n", // we hope to hit our logEverythingElseHandler
+			}},
 		},
 		{
-			name:               "missing header",
-			expectedStatus:     http.StatusForbidden,
-			noSetAuthorization: true,
+			baseName:           "no_headers_at_all",
 			URL:                "/api/v1/query_range",
-			expectedBody:       "got no value for the HTTP header which is expected to contain the JWT\n",
-			app:                &app,
+			noSetAuthorization: true,
+			expectedResults: []ExpectedResult{
+				{
+					matchingApp: "*",
+					status:      http.StatusForbidden,
+					body:        "got no value for the HTTP header which is expected to contain the JWT\n",
+				},
+			},
 		},
 		{
-			name:           "malformed header 1",
-			expectedStatus: http.StatusForbidden,
-			URL:            "/api/v1/query_range",
-			authorization:  "B",
-			expectedBody:   "failed to remove the bearer prefix from the JWT\n",
-			app:            &app,
+			baseName:           "missing_auth_header",
+			URL:                "/api/v1/query_range",
+			noSetAuthorization: true,
+			header:             TestHeader{key: "MAGICHEADER", val: "notaverygoodsecret"}, // one app should pass due to this
+			expectedResults: []ExpectedResult{
+				{
+					matchingApp: "*",
+					status:      http.StatusForbidden,
+					body:        "got no value for the HTTP header which is expected to contain the JWT\n",
+				},
+				{
+					matchingApp: "group_or_header",
+					status:      http.StatusOK,
+					body:        "< fake upstream server response >\n",
+				},
+			},
 		},
 		{
-			name:           "malformed header 2",
-			expectedStatus: http.StatusForbidden,
-			URL:            "/api/v1/query_range",
-			authorization:  "Bearer ",
-			expectedBody:   "error parsing token\n",
-			app:            &app,
+			baseName:            "malformed_auth_header_1",
+			URL:                 "/api/v1/query_range",
+			authorizationHeader: "B",
+			header:              TestHeader{key: "MAGICHEADER", val: "notaverygoodsecret"}, // one app should pass due to this
+			expectedResults: []ExpectedResult{
+				{
+					matchingApp: "*",
+					status:      http.StatusForbidden,
+					body:        "failed to remove the bearer prefix from the JWT\n",
+				},
+				{
+					matchingApp: "group_or_header",
+					status:      http.StatusOK,
+					body:        "< fake upstream server response >\n",
+				},
+			},
 		},
 		{
-			name:           "malformed header 3",
-			expectedStatus: http.StatusForbidden,
-			URL:            "/api/v1/query_range",
-			authorization:  "Bearer skk",
-			expectedBody:   "error parsing token\n",
-			app:            &app,
+			baseName:            "malformed_auth_header_2",
+			URL:                 "/api/v1/query_range",
+			authorizationHeader: "Bearer ",
+			header:              TestHeader{key: "MAGICHEADER", val: "notaverygoodsecret"}, // one app should pass due to this
+			expectedResults: []ExpectedResult{
+				{
+					matchingApp: "*",
+					status:      http.StatusForbidden,
+					body:        "error parsing token\n",
+				},
+				{
+					matchingApp: "group_or_header",
+					status:      http.StatusOK,
+					body:        "< fake upstream server response >\n",
+				},
+			},
 		},
 		{
-			name:           "malformed header 4",
-			expectedStatus: http.StatusForbidden,
-			URL:            "/api/v1/query_range",
-			authorization:  "Bearer abc def",
-			expectedBody:   "error parsing token\n",
-			app:            &app,
+			baseName:            "malformed_headers_1",
+			URL:                 "/api/v1/query_range",
+			authorizationHeader: "Bearer skk",
+			header:              TestHeader{key: "MAGICHEADER", val: "wrong"},
+			expectedResults: []ExpectedResult{
+				{
+					matchingApp: "*",
+					status:      http.StatusForbidden,
+					body:        "error parsing token\n",
+				},
+			},
 		},
 		{
-			name:           "user in token is invalid 1",
-			expectedStatus: http.StatusForbidden,
-			URL:            "/api/v1/query_range",
-			authorization:  "Bearer " + tokens["noTenant"], // token configured with user name which is not in config store
-			expectedBody:   "no tenant labels are configured for the user\n",
-			app:            &app,
+			baseName:            "malformed_headers_2",
+			URL:                 "/api/v1/query_range",
+			authorizationHeader: "Bearer abc def",
+			header:              TestHeader{key: "MAGICHEADER", val: ""},
+			expectedResults: []ExpectedResult{
+				{
+					matchingApp: "*",
+					status:      http.StatusForbidden,
+					body:        "error parsing token\n",
+				},
+			},
 		},
 		{
-			name:           "user in token is invalid 2",
-			authorization:  "Bearer " + tokens["noTenant"],                               // token configured with user name which is not in config store
-			URL:            `/api/v1/query_range?query=up{tenant_id="forbidden_tenant"}`, // there is no value for tenant_id that should work
-			expectedStatus: http.StatusForbidden,
-			expectedBody:   "no tenant labels are configured for the user\n",
-			app:            &app,
+			baseName:            "user_in_token_is_invalid_1",
+			URL:                 "/api/v1/query_range",
+			authorizationHeader: "Bearer " + tokens["invalidTenant"], // token configured with user name which is not in config store
+			expectedResults: []ExpectedResult{
+				{
+					matchingApp: "*",
+					status:      http.StatusForbidden,
+					body:        "no tenant labels are configured for the user\n",
+				},
+				{
+					matchingApp: "group_or_header",
+					status:      http.StatusOK,
+					body:        "< fake upstream server response >\n",
+				},
+			},
 		},
 		{
-			name:           "empty query",
-			authorization:  "Bearer " + tokens["userTenant"],
-			URL:            `/api/v1/query_range`,
-			expectedStatus: http.StatusOK,
-			expectedBody:   "< fake upstream server response >\n",
-			app:            &app,
+			baseName:            "user_in_token_is_invalid_2",
+			URL:                 `/api/v1/query_range?query=up{tenant_id="forbidden_tenant"}`, // there is no value for tenant_id that should work
+			authorizationHeader: "Bearer " + tokens["invalidTenant"],                          // token configured with user name which is not in config store
+			expectedResults: []ExpectedResult{
+				{
+					matchingApp: "*",
+					status:      http.StatusForbidden,
+					body:        "no tenant labels are configured for the user\n",
+				},
+				{
+					matchingApp: "group_or_header",
+					status:      http.StatusOK,
+					body:        "< fake upstream server response >\n",
+				},
+			},
 		},
 		{
-			name:           "multiple group membership with invalid tenant",
-			authorization:  "Bearer " + tokens["groupTenant"],
-			URL:            `/api/v1/query_range?query=up{tenant_id="forbidden_tenant"}`,
-			expectedStatus: http.StatusForbidden,
-			expectedBody:   `{"status":"error","errorType":"bad_data","error": "unauthorized tenant label value"}` + "\n",
-			app:            &app_with_error_on_illegal_tenant,
+			baseName:            "empty_query",
+			URL:                 `/api/v1/query_range`,
+			authorizationHeader: "Bearer " + tokens["userTenant"],
+			expectedResults: []ExpectedResult{
+				{
+					matchingApp: "*",
+					status:      http.StatusOK,
+					body:        "< fake upstream server response >\n",
+				},
+			},
 		},
 		{
-			name:           "user without groups with invalid tenant",
-			authorization:  "Bearer " + tokens["userTenant"],
-			URL:            `/api/v1/query?query=up{tenant_id="another_forbidden_tenant"}`,
-			expectedStatus: http.StatusForbidden,
-			expectedBody:   `{"status":"error","errorType":"bad_data","error": "unauthorized tenant label value"}` + "\n",
-			app:            &app_with_error_on_illegal_tenant,
+			baseName:            "multiple_group_membership_with_invalid_tenant",
+			URL:                 `/api/v1/query_range?query=up{tenant_id="forbidden_tenant"}`,
+			authorizationHeader: "Bearer " + tokens["groupTenant"],
+			expectedResults: []ExpectedResult{
+				{
+					matchingApp: "*",
+					status:      http.StatusOK,
+					body:        "",
+				},
+				{
+					matchingApp: "bad_tenant_intolerant",
+					status:      http.StatusForbidden,
+					body:        `{"status":"error","errorType":"bad_data","error": "unauthorized tenant label value"}` + "\n",
+				},
+				{
+					matchingApp: "header",
+					status:      http.StatusOK,
+					body:        "< fake upstream server response >\n",
+				},
+			},
 		},
 		{
-			name:           "user query that results in no matched tenant label values and empty result",
-			authorization:  "Bearer " + tokens["userTenant"],
-			URL:            `/api/v1/query?query=up{tenant_id=~"frogs!"}`,
-			expectedStatus: http.StatusOK,
-			expectedBody:   "",
-			app:            &app,
+			baseName:            "user_without_groups_with_invalid_tenant",
+			URL:                 `/api/v1/query?query=up{tenant_id="another_forbidden_tenant"}`,
+			authorizationHeader: "Bearer " + tokens["userTenant"],
+			expectedResults: []ExpectedResult{
+				{
+					matchingApp: "*",
+					status:      http.StatusOK,
+					body:        "",
+				},
+				{
+					matchingApp: "bad_tenant_intolerant",
+					status:      http.StatusForbidden,
+					body:        `{"status":"error","errorType":"bad_data","error": "unauthorized tenant label value"}` + "\n",
+				},
+				{
+					matchingApp: "header",
+					status:      http.StatusOK,
+					body:        "< fake upstream server response >\n",
+				},
+			},
 		},
 		{
-			name:           "user query that results in no matched tenant label values and error",
-			authorization:  "Bearer " + tokens["userTenant"],
-			URL:            `/api/v1/query?query=up{tenant_id=~"frogs!"}`,
-			expectedStatus: http.StatusForbidden,
-			expectedBody:   `{"status":"error","errorType":"bad_data","error": "no tenant label values matched"}` + "\n",
-			app:            &app_with_error_on_illegal_tenant,
+			baseName:            "user_query_that_results_in_no_matched_tenant_label_values_and_empty_result",
+			URL:                 `/api/v1/query?query=up{tenant_id=~"frogs!"}`,
+			authorizationHeader: "Bearer " + tokens["userTenant"],
+			expectedResults: []ExpectedResult{
+				{
+					matchingApp: "*",
+					status:      http.StatusOK,
+					body:        "",
+				},
+				{
+					matchingApp: "bad_tenant_intolerant",
+					status:      http.StatusForbidden,
+					body:        `{"status":"error","errorType":"bad_data","error": "no tenant label values matched"}` + "\n",
+				},
+				{
+					matchingApp: "header",
+					status:      http.StatusOK,
+					body:        "< fake upstream server response >\n",
+				},
+			},
 		},
 		{
-			name:           "multiple group membership with single valid tenant value 1",
-			authorization:  "Bearer " + tokens["groupTenant"],
-			URL:            `/api/v1/query?query=up{tenant_id="tenant_id_g1"}`,
-			expectedStatus: http.StatusOK,
-			expectedBody:   "< fake upstream server response >\n",
-			app:            &app,
+			baseName:            "group_membership_with_single_valid_tenant_value",
+			URL:                 `/api/v1/query?query=up{tenant_id="tenant_id_g1"}`,
+			authorizationHeader: "Bearer " + tokens["groupTenant"],
+			expectedResults: []ExpectedResult{
+				{
+					matchingApp: "*",
+					status:      http.StatusOK,
+					body:        "< fake upstream server response >\n",
+				},
+			},
 		},
 		{
-			name:           "multiple group membership with single valid tenant value 2",
-			authorization:  "Bearer " + tokens["twoGroupsTenant"],
-			URL:            `/api/v1/query?query={tenant_id="tenant_id_g2"} != 1337`,
-			expectedStatus: http.StatusOK,
-			expectedBody:   "< fake upstream server response >\n",
-			app:            &app,
+			baseName:            "multiple_group_membership_with_single_valid_tenant_value",
+			URL:                 `/api/v1/query?query={tenant_id="tenant_id_g2"} != 1337`,
+			authorizationHeader: "Bearer " + tokens["twoGroupsTenant"],
+			expectedResults: []ExpectedResult{
+				{
+					matchingApp: "*",
+					status:      http.StatusOK,
+					body:        "< fake upstream server response >\n",
+				},
+			},
 		},
 		{
-			name:           "multiple group membership with multiple valid tenant values 1",
-			authorization:  "Bearer " + tokens["twoGroupsTenant"],
-			URL:            `/api/v1/query?query=up{tenant_id=~"tenant_id_g1|tenant_id_g4"}`,
-			expectedStatus: http.StatusOK,
-			expectedBody:   "< fake upstream server response >\n",
-			app:            &app,
+			baseName:            "multiple_group_membership_with_multiple_valid_tenant_values_1",
+			URL:                 `/api/v1/query?query=up{tenant_id=~"tenant_id_g1|tenant_id_g4"}`,
+			authorizationHeader: "Bearer " + tokens["twoGroupsTenant"],
+			expectedResults: []ExpectedResult{
+				{
+					matchingApp: "*",
+					status:      http.StatusOK,
+					body:        "< fake upstream server response >\n",
+				},
+			},
 		},
 		{
-			name:           "multiple group membership with multiple valid tenant values 2",
-			authorization:  "Bearer " + tokens["twoGroupsTenant"],
-			URL:            `/api/v1/query?query={tenant_id=~"tenant_id_g1|tenant_id_g3"} != 1337`,
-			expectedStatus: http.StatusOK,
-			expectedBody:   "< fake upstream server response >\n",
-			app:            &app,
+			baseName:            "multiple_group_membership_with_multiple_valid_tenant_values_2",
+			URL:                 `/api/v1/query?query={tenant_id=~"tenant_id_g1|tenant_id_g3"} != 1337`,
+			authorizationHeader: "Bearer " + tokens["twoGroupsTenant"],
+			expectedResults: []ExpectedResult{
+				{
+					matchingApp: "*",
+					status:      http.StatusOK,
+					body:        "< fake upstream server response >\n",
+				},
+			},
 		},
 		{
-			name:           "strange query with magic value bypass 1",
-			authorization:  "Bearer " + tokens["magicBypassTenant"],
-			URL:            `/api/v1/query?query=count(count({__name__!="",tenant_id="bob"}) by (__name__))`, // any tenant value works
-			expectedStatus: http.StatusOK,
-			expectedBody:   "< fake upstream server response >\n",
-			app:            &app_with_admin,
+			baseName:            "strange_query_with_magic_value_bypass_1",
+			URL:                 `/api/v1/query?query=count(count({__name__!="",tenant_id="bob"}) by (__name__))`, // any tenant value works
+			authorizationHeader: "Bearer " + tokens["magicBypassTenant"],
+			expectedResults: []ExpectedResult{
+				{
+					matchingApp: "*",
+					status:      http.StatusOK,
+					body:        "",
+				},
+				{
+					matchingApp: "only_magic_val",
+					status:      http.StatusOK,
+					body:        "< fake upstream server response >\n",
+				},
+				{
+					matchingApp: "bad_tenant_intolerant",
+					status:      http.StatusForbidden,
+					body:        `{"status":"error","errorType":"bad_data","error": "no tenant label values matched"}` + "\n",
+				},
+			},
 		},
 		{
-			name:           "strange query with magic value bypass 2",
-			authorization:  "Bearer " + tokens["magicBypassTenant"],
-			URL:            `/api/v1/query?query=count(count({__name__!=""}) by (__name__))`, // missing tenant value works
-			expectedStatus: http.StatusOK,
-			expectedBody:   "< fake upstream server response >\n",
-			app:            &app_with_admin,
+			baseName:            "strange_query_with_magic_value_bypass_2",
+			URL:                 `/api/v1/query?query=count(count({__name__!=""}) by (__name__))`, // missing tenant value works
+			authorizationHeader: "Bearer " + tokens["magicBypassTenant"],
+			expectedResults: []ExpectedResult{
+				{
+					matchingApp: "*",
+					status:      http.StatusOK,
+					body:        "",
+				},
+				{
+					matchingApp: "only_magic_val",
+					status:      http.StatusOK,
+					body:        "< fake upstream server response >\n",
+				},
+				{
+					matchingApp: "bad_tenant_intolerant",
+					status:      http.StatusForbidden,
+					body:        `{"status":"error","errorType":"bad_data","error": "no tenant label values matched"}` + "\n",
+				},
+			},
 		},
 		{
-			name:           "strange query with magic value bypass 3",
-			authorization:  "Bearer " + tokens["twoGroupsTenant"],
-			URL:            `/api/v1/query?query=count(count({__name__!="",tenant_id="bob"}) by (__name__))`, // without the magic value, tenant is checked
-			expectedStatus: http.StatusOK,
-			expectedBody:   "",
-			app:            &app_with_admin,
+			baseName:            "strange_query_with_magic_value_bypass_3",
+			URL:                 `/api/v1/query?query=count(count({__name__!="",tenant_id="bob"}) by (__name__))`, // without the magic value, tenant is checked
+			authorizationHeader: "Bearer " + tokens["twoGroupsTenant"],
+			expectedResults: []ExpectedResult{
+				{
+					matchingApp: "*",
+					status:      http.StatusOK,
+					body:        "",
+				},
+				{
+					matchingApp: "bad_tenant_intolerant",
+					status:      http.StatusForbidden,
+					body:        `{"status":"error","errorType":"bad_data","error": "no tenant label values matched"}` + "\n",
+				},
+			},
 		},
 		{
-			name:           "loki query_range with single valid tenant",
-			authorization:  "Bearer " + tokens["twoGroupsTenant"],
-			URL:            "/loki/api/v1/query_range?direction=backward&end=1690463973787000000&limit=1000&query=sum by (level) (count_over_time({tenant_id=\"tenant_id_g1\"} |= `path` |= `label` | json | line_format `{{.message}}` | json | line_format `{{.request}}` | json | line_format `{{.method | printf \"%-4s\"}} {{.path | printf \"%-60s\"}} {{.url | urldecode}}`[1m]))&start=1690377573787000000&step=60000ms",
-			expectedStatus: http.StatusOK,
-			expectedBody:   "< fake upstream server response >\n",
-			app:            &app,
+			baseName:            "invalid_magic_value_bypass",
+			URL:                 `/api/v1/query?query=count(count({__name__!="",tenant_id="bob"}) by (__name__))`, // without the magic value, tenant is checked
+			authorizationHeader: "Bearer " + tokens["invalidMagicBypassTenant"],
+			expectedResults: []ExpectedResult{
+				{
+					matchingApp: "*",
+					status:      http.StatusForbidden,
+					body:        "no tenant labels are configured for the user",
+				},
+			},
 		},
 		{
-			name:           "loki index stats with single valid tenant",
-			authorization:  "Bearer " + tokens["userTenant"],
-			URL:            `/loki/api/v1/index/stats?query={tenant_id="tenant_id_u1"}&start=1690377573724000000&end=1690463973724000000`,
-			expectedStatus: http.StatusOK,
-			expectedBody:   "< fake upstream server response >\n",
-			app:            &app,
+			baseName:            "invalid_magic_value_bypass_with_magic_header",
+			URL:                 `/api/v1/query?query=count(count({__name__!="",tenant_id="bob"}) by (__name__))`, // without the magic value, tenant is checked
+			authorizationHeader: "Bearer " + tokens["invalidMagicBypassTenant"],
+			header:              TestHeader{key: "MAGICHEADER", val: "notaverygoodsecret"},
+			expectedResults: []ExpectedResult{
+				{
+					matchingApp: "*",
+					status:      http.StatusForbidden,
+					body:        "no tenant labels are configured for the user",
+				},
+				{
+					matchingApp: "only_magic_val",
+					status:      http.StatusOK,
+					body:        "< fake upstream server response >\n",
+				},
+			},
 		},
 		{
-			name:           "loki query_range with single invalid tenant",
-			authorization:  "Bearer " + tokens["userTenant"],
-			URL:            "/loki/api/v1/query_range?direction=backward&end=1690463973693000000&limit=10&query={tenant_id=\"forbidden_tenant\"} |= `path` |= `label` | json | line_format `{{.message}}` | json | line_format `{{.request}}` | json | line_format `{{.method}} {{.path}} {{.url | urldecode}}`&start=1690377573693000000&step=86400000ms",
-			expectedStatus: http.StatusForbidden,
-			expectedBody:   "unauthorized tenant label value\n",
-			app:            &app_with_error_on_illegal_tenant,
+			baseName:            "loki_queryrange_with_valid_label",
+			URL:                 "/loki/api/v1/query_range?direction=backward&end=1690463973787000000&limit=1000&query=sum by (level) (count_over_time({tenant_id=\"tenant_id_g1\"} |= `path` |= `label` | json | line_format `{{.message}}` | json | line_format `{{.request}}` | json | line_format `{{.method | printf \"%-4s\"}} {{.path | printf \"%-60s\"}} {{.url | urldecode}}`[1m]))&start=1690377573787000000&step=60000ms",
+			authorizationHeader: "Bearer " + tokens["twoGroupsTenant"],
+			expectedResults: []ExpectedResult{
+				{
+					matchingApp: "*",
+					status:      http.StatusOK,
+					body:        "",
+				},
+			},
 		},
 		{
-			name:           "loki user without groups with invalid tenant empty result",
-			authorization:  "Bearer " + tokens["userTenant"],
-			URL:            `/loki/api/v1/query_range?direction=backward&end=1690463973693000000&limit=10&query={tenant_id="forbidden_tenant"}`,
-			expectedStatus: http.StatusOK,
-			expectedBody:   "",
-			app:            &app,
+			baseName:            "loki_index_stats_with_valid_label",
+			URL:                 `/loki/api/v1/index/stats?query={tenant_id="tenant_id_u1"}&start=1690377573724000000&end=1690463973724000000`,
+			authorizationHeader: "Bearer " + tokens["userTenant"],
+			expectedResults: []ExpectedResult{
+				{
+					matchingApp: "*",
+					status:      http.StatusOK,
+					body:        "",
+				},
+			},
 		},
 		{
-			name:           "loki user without groups with invalid tenant give error",
-			authorization:  "Bearer " + tokens["userTenant"],
-			URL:            `/loki/api/v1/query_range?direction=backward&end=1690463973693000000&limit=10&query={tenant_id="forbidden_tenant"}`,
-			expectedStatus: http.StatusForbidden,
-			expectedBody:   "unauthorized tenant label value\n",
-			app:            &app_with_error_on_illegal_tenant,
+			baseName:            "loki_big_query_invalid_label_1",
+			URL:                 "/loki/api/v1/query_range?direction=backward&end=1690463973693000000&limit=10&query={tenant_id=\"forbidden_tenant\"} |= `path` |= `label` | json | line_format `{{.message}}` | json | line_format `{{.request}}` | json | line_format `{{.method}} {{.path}} {{.url | urldecode}}`&start=1690377573693000000&step=86400000ms",
+			authorizationHeader: "Bearer " + tokens["userAndGroupTenant"],
+			expectedResults: []ExpectedResult{
+				{
+					matchingApp: "*",
+					status:      http.StatusOK,
+					body:        "",
+				},
+				{
+					matchingApp: "bad_tenant_intolerant",
+					status:      http.StatusForbidden,
+					body:        "unauthorized tenant label value",
+				},
+			},
+		},
+		{
+			baseName:            "loki_big_query_invalid_label_2",
+			URL:                 `/loki/api/v1/query_range?direction=backward&end=1690463973693000000&limit=10&query={tenant_id="forbidden_tenant"}`,
+			authorizationHeader: "Bearer " + tokens["userTenant"],
+			expectedResults: []ExpectedResult{
+				{
+					matchingApp: "*",
+					status:      http.StatusOK,
+					body:        "",
+				},
+				{
+					matchingApp: "bad_tenant_intolerant",
+					status:      http.StatusForbidden,
+					body:        "unauthorized tenant label value",
+				},
+			},
+		},
+		{
+			baseName:            "loki_big_query_invalid_label_3",
+			URL:                 `/loki/api/v1/query_range?direction=backward&end=1690463973693000000&limit=10&query={tenant_id="forbidden_tenant"}`,
+			authorizationHeader: "Bearer " + tokens["magicBypassTenant"],
+			expectedResults: []ExpectedResult{
+				{
+					matchingApp: "*",
+					status:      http.StatusOK,
+					body:        "",
+				},
+				{
+					matchingApp: "only_magic_val",
+					status:      http.StatusOK,
+					body:        "< fake upstream server response >\n",
+				},
+				{
+					matchingApp: "bad_tenant_intolerant",
+					status:      http.StatusForbidden,
+					body:        "unauthorized tenant label value",
+				},
+			},
 		},
 	}
 
-	for _, tc := range cases {
+	for appname, app := range appmap {
+		for _, tc := range cases {
+			tc.name = tc.baseName + "/" + appname
+			t.Run(tc.name, func(t *testing.T) {
 
-		t.Run(tc.name, func(t *testing.T) {
+				// Create a request
+				log.Debug().Str("URL", tc.URL).Str("Authorization", tc.authorizationHeader).Msg("Request")
+				req, err := http.NewRequest("GET", tc.URL, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				// Set headers based on the test case.
+				if !tc.noSetAuthorization {
+					req.Header.Add("Authorization", tc.authorizationHeader)
+				}
 
-			// Create a request
-			log.Debug().Str("URL", tc.URL).Str("Authorization", tc.authorization).Msg("Request")
-			req, err := http.NewRequest("GET", tc.URL, nil)
-			if err != nil {
-				t.Fatal(err)
-			}
-			// Set headers based on the test case.
-			if !tc.noSetAuthorization {
-				req.Header.Add("Authorization", tc.authorization)
-			}
+				// Prepare the response recorder
+				rr := httptest.NewRecorder()
 
-			// Prepare the response recorder
-			rr := httptest.NewRecorder()
+				// Call the function
+				app.e.ServeHTTP(rr, req)
 
-			// Call the function
-			tc.app.e.ServeHTTP(rr, req)
+				// Find which of the expected results applies to our situation
+				expectedResults := ExpectedResult{}
+				for _, maybe := range tc.expectedResults {
+					if maybe.matchingApp == appname {
+						expectedResults = maybe
+					}
+				}
+				if expectedResults.matchingApp == "" {
+					for _, maybe := range tc.expectedResults {
+						if maybe.matchingApp == "*" {
+							expectedResults = maybe
+						}
+					}
+				}
+				if expectedResults.matchingApp == "" {
+					log.Warn().Msg("We have apparently not found what results are expected for this test.")
+				}
 
-			// Check the status code
-			happy := assert.Equal(t, tc.expectedStatus, rr.Code)
+				// Check the status code
+				happy := assert.Equal(t, expectedResults.status, rr.Code)
 
-			// Check the response body
-			if tc.expectedBody != "" {
-				happy = happy && assert.Contains(t, rr.Body.String(), tc.expectedBody)
-			}
+				// Check the response body
+				if expectedResults.body != "" {
+					happy = happy && assert.Contains(t, rr.Body.String(), expectedResults.body)
+				}
 
-			log.Info().Bool("passed", happy).Str("name", tc.name).Msg("Reverse proxy test")
-		})
+				log.Info().Bool("passed", happy).Str("name", tc.name).Str("appname", appname).Msg("Reverse proxy test")
+			})
+		}
 	}
 }
 
@@ -427,11 +729,21 @@ func TestIsAdminSkip(t *testing.T) {
 	app.WithConfig()
 	app.Cfg.Admin.GroupBypass = true
 	app.Cfg.Admin.Group = "gepardec-run-admins"
+
 	token := &OAuthToken{Groups: []string{"gepardec-run-admins"}}
 	a.True(isAdmin(*token, app))
-
-	token.Groups = []string{"user"}
+	app.Cfg.Admin.GroupBypass = false // show that we need group bypass to be enabled
 	a.False(isAdmin(*token, app))
+
+	app.Cfg.Admin.GroupBypass = true
+	token.Groups = []string{"usergroup"} // not admin group
+	a.False(isAdmin(*token, app))
+	app.Cfg.Admin.GroupBypass = false
+	a.False(isAdmin(*token, app))
+
+	app.Cfg.Admin.GroupBypass = true
+	token.Groups = []string{"gepardec-run-admins", "g2", "g3"}
+	a.True(isAdmin(*token, app))
 }
 
 func TestLogAndWriteError(t *testing.T) {
