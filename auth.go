@@ -118,5 +118,5 @@ func validateLabels(token OAuthToken, a *App) ([]string, bool, error) {
 }
 
 func isAdmin(token OAuthToken, a *App) bool {
-	return slices.Contains[[]string, string](token.Groups, a.Cfg.Admin.Group)
+	return a.Cfg.Admin.GroupBypass && slices.Contains[[]string, string](token.Groups, a.Cfg.Admin.Group)
 }

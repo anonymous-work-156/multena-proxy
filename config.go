@@ -40,6 +40,11 @@ type Config struct {
 		Group            string `yaml:"group"`              // the name of the admin group
 		MagicValueBypass bool   `yaml:"magic_value_bypass"` // enable or disable magic value bypass (ignored with nested configmap structure)
 		MagicValue       string `yaml:"magic_value"`        // the magic value which bypasses checks (ignored with nested configmap structure)
+		HeaderBypass     bool   `yaml:"header_bypass"`      // enable or disable magic header bypass
+		Header           struct {
+			Key   string `yaml:"key"`   // header name for bypass
+			Value string `yaml:"value"` // header value for bypass
+		} `yaml:"header"`
 	} `yaml:"admin"`
 
 	Dev struct {

@@ -141,6 +141,7 @@ func (c *ConfigMapHandler) GetLabels(token OAuthToken, a *App) ([]string, bool) 
 	} else {
 		log.Debug().Msg("Linear label CM format.")
 
+		// see if there is something named after our user
 		for k, v := range c.labels[token.PreferredUsername] {
 			if !v {
 				log.Trace().Str("label value", k).Msg("Ignore label value because it is marked as false-ey.")
@@ -153,6 +154,7 @@ func (c *ConfigMapHandler) GetLabels(token OAuthToken, a *App) ([]string, bool) 
 			}
 		}
 
+		// see if any of the groups from the token have a section
 		for _, group := range token.Groups {
 			for k, v := range c.labels[group] {
 				if !v {

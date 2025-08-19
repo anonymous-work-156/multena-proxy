@@ -102,6 +102,8 @@ func (a *App) WithThanos() *App {
 		{Url: "/api/v1/label/{label}/values", MatchWord: "match[]"},
 		{Url: "/api/v1/query_exemplars", MatchWord: "query"},
 		{Url: "/api/v1/status/buildinfo", MatchWord: "query"},
+		{Url: "/api/v1/rules", MatchWord: ""},
+		{Url: "/api/v1/alerts", MatchWord: ""},
 	}
 	thanosRouter := a.e.PathPrefix(a.Cfg.Thanos.PathPrefix).Subrouter()
 	for _, route := range routes {
@@ -140,30 +142,45 @@ func handler(matchWord string, enforcer EnforceQL, dsURL string, tls bool, heade
 		log.Fatal().Err(err).Str("url", dsURL).Msg("Error parsing URL")
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
-		oauthToken, err := getToken(r, a)
-		if err != nil {
-			logAndWriteError(w, http.StatusForbidden, err, "")
-			return
-		}
+		skip := checkNonenforcementHeader(headers, a.Cfg)
 
-		labels, skip, err := validateLabels(oauthToken, a)
-		if err != nil {
-			logAndWriteError(w, http.StatusForbidden, err, "")
-			return
-		}
-		if skip {
-			streamUp(w, r, upstreamURL, tls, headers, a)
-			return
-		}
+		if !skip {
+			oauthToken, err := getToken(r, a)
+			if err != nil {
+				logAndWriteError(w, http.StatusForbidden, err, "")
+				return
+			}
 
-		err = enforceRequest(r, enforcer, labels, matchWord, a.Cfg)
-		if err != nil {
-			logAndWriteError(w, http.StatusForbidden, err, "")
-			return
+			labels, skip, err := validateLabels(oauthToken, a)
+			if err != nil {
+				logAndWriteError(w, http.StatusForbidden, err, "")
+				return
+			}
+
+			if !(skip || matchWord == "") {
+				err = enforceRequest(r, enforcer, labels, matchWord, a.Cfg)
+				if err != nil {
+					logAndWriteError(w, http.StatusForbidden, err, "")
+					return
+				}
+			}
 		}
 
 		streamUp(w, r, upstreamURL, tls, headers, a)
 	}
+}
+
+// checkAdminHeader checks to see if the request contains a header and value which indicate we should skip enforcement.
+// The target header key must not be blank, it must be present in the request, and the value must not be blank.
+func checkNonenforcementHeader(headers map[string]string, cfg *Config) bool {
+	if !cfg.Admin.HeaderBypass || cfg.Admin.Header.Key == "" {
+		return false
+	}
+	obsHeaderVal := headers[cfg.Admin.Header.Key]
+	if obsHeaderVal != "" && obsHeaderVal == cfg.Admin.Header.Value {
+		return true
+	}
+	return false
 }
 
 // streamUp forwards the provided HTTP request to the specified upstream URL using a reverse proxy.
