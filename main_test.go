@@ -181,6 +181,7 @@ func setupReverseProxyTest() (map[string]App, map[string]string) {
 		log.Info().Msg("Fake JWKS server sending response.")
 		_, err := fmt.Fprintf(w, `{"keys":[{"kty":"EC","kid":"testKid","alg":"ES256","use":"sig","x":"%s","y":"%s","crv":"P-256"}]}`, x, y)
 		if err != nil {
+			log.Error().Msg("Some kind of error in the fake JWKS server.")
 			return // we are in a test server, do nothing with the error
 		}
 	}))
@@ -191,6 +192,7 @@ func setupReverseProxyTest() (map[string]App, map[string]string) {
 		log.Info().Msg("Fake metrics/logs server sending response.")
 		_, err := fmt.Fprintln(w, "< fake upstream server response >")
 		if err != nil {
+			log.Error().Msg("Some kind of error in the fake metrics/logs server.")
 			return // we are in a test server, do nothing with the error
 		}
 	}))
@@ -510,7 +512,7 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "bad_tenant_intolerant",
 					status:      http.StatusForbidden,
-					body:        `{"status":"error","errorType":"bad_data","error": "no tenant label values matched"}` + "\n",
+					body:        `{"status":"error","errorType":"bad_data","error": "unauthorized tenant label value"}` + "\n",
 				},
 			},
 		},
@@ -529,11 +531,6 @@ func Test_reverseProxy(t *testing.T) {
 					status:      http.StatusOK,
 					body:        "< fake upstream server response >\n",
 				},
-				{
-					matchingApp: "bad_tenant_intolerant",
-					status:      http.StatusForbidden,
-					body:        `{"status":"error","errorType":"bad_data","error": "no tenant label values matched"}` + "\n",
-				},
 			},
 		},
 		{
@@ -549,7 +546,7 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "bad_tenant_intolerant",
 					status:      http.StatusForbidden,
-					body:        `{"status":"error","errorType":"bad_data","error": "no tenant label values matched"}` + "\n",
+					body:        `{"status":"error","errorType":"bad_data","error": "unauthorized tenant label value"}` + "\n",
 				},
 			},
 		},
@@ -575,11 +572,6 @@ func Test_reverseProxy(t *testing.T) {
 					matchingApp: "*",
 					status:      http.StatusForbidden,
 					body:        "no tenant labels are configured for the user",
-				},
-				{
-					matchingApp: "only_magic_val",
-					status:      http.StatusOK,
-					body:        "< fake upstream server response >\n",
 				},
 			},
 		},

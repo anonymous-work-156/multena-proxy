@@ -157,7 +157,9 @@ func handler(matchWord string, enforcer EnforceQL, dsURL string, tls bool, heade
 				return
 			}
 
-			if !(skip || matchWord == "") {
+			if skip || matchWord == "" {
+				log.Debug().Msg("No label enforcement.")
+			} else {
 				err = enforceRequest(r, enforcer, labels, matchWord, a.Cfg)
 				if err != nil {
 					logAndWriteError(w, http.StatusForbidden, err, "")
@@ -174,12 +176,15 @@ func handler(matchWord string, enforcer EnforceQL, dsURL string, tls bool, heade
 // The target header key must not be blank, it must be present in the request, and the value must not be blank.
 func checkNonenforcementHeader(headers map[string]string, cfg *Config) bool {
 	if !cfg.Admin.HeaderBypass || cfg.Admin.Header.Key == "" {
+		log.Debug().Msg("Header-based bypass is not enabled.")
 		return false
 	}
 	obsHeaderVal := headers[cfg.Admin.Header.Key]
 	if obsHeaderVal != "" && obsHeaderVal == cfg.Admin.Header.Value {
+		log.Debug().Msg("Header indicates that we can skip enforcement.")
 		return true
 	}
+	log.Debug().Msg("Header (or lack thereof) indicates that we can not skip enforcement.")
 	return false
 }
 
