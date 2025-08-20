@@ -9,9 +9,6 @@ import (
 
 func Test_tenantLabelValues(t *testing.T) {
 
-	log.Info().Caller().Msg("Start Test_tenantLabelValues().")
-	defer log.Info().Msg("End Test_tenantLabelValues().")
-
 	type args struct {
 		give                     LabelValueInfo
 		allowedTenantLabelValues []string

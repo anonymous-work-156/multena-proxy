@@ -29,7 +29,7 @@ func genJWKS(username, email string, groups []string, pk *ecdsa.PrivateKey) (str
 
 func makeTestApp(jwksServer, upstreamServer *httptest.Server, errorOnIllegalTenantValue bool, adminGroup bool, magicValueBypass bool, headerBypass bool) App {
 	app := App{}
-	app.WithConfig()
+	app.WithConfig() // note: sets logging level based on config.yaml
 	app.Cfg.Web.JwksCertURL = jwksServer.URL
 	app.WithJWKS()
 
@@ -42,12 +42,12 @@ func makeTestApp(jwksServer, upstreamServer *httptest.Server, errorOnIllegalTena
 
 	app.Cfg.Admin.GroupBypass = adminGroup
 	if adminGroup {
-		app.Cfg.Admin.Group = "admingroupname" // admingroupname matches tenant defined in setupTestMain()
+		app.Cfg.Admin.Group = "admingroupname" // admingroupname matches tenant defined in setupReverseProxyTest()
 	}
 
 	app.Cfg.Admin.MagicValueBypass = magicValueBypass
 	if magicValueBypass {
-		app.Cfg.Admin.MagicValue = "<(magicadminvalue)>" // <(magicadminvalue)> matches tenant defined in setupTestMain()
+		app.Cfg.Admin.MagicValue = "<(magicadminvalue)>" // <(magicadminvalue)> matches user defined below
 	}
 
 	app.Cfg.Admin.HeaderBypass = headerBypass
@@ -74,7 +74,7 @@ func makeTestApp(jwksServer, upstreamServer *httptest.Server, errorOnIllegalTena
 	return app
 }
 
-func setupTestMain() (map[string]App, map[string]string) {
+func setupReverseProxyTest() (map[string]App, map[string]string) {
 	// Generate a new private key.
 	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -207,10 +207,7 @@ func setupTestMain() (map[string]App, map[string]string) {
 
 func Test_reverseProxy(t *testing.T) {
 
-	log.Info().Caller().Msg("Start Test_reverseProxy().")
-	defer log.Info().Msg("End Test_reverseProxy().")
-
-	appmap, tokens := setupTestMain()
+	appmap, tokens := setupReverseProxyTest()
 
 	type ExpectedResult struct {
 		matchingApp string

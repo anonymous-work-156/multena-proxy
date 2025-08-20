@@ -10,9 +10,6 @@ import (
 
 func TestGetBearerToken(t *testing.T) {
 
-	log.Info().Caller().Msg("Start TestGetBearerToken().")
-	defer log.Info().Msg("End TestGetBearerToken().")
-
 	tests := []struct {
 		name       string
 		authHeader string
@@ -53,10 +50,6 @@ func TestGetBearerToken(t *testing.T) {
 }
 
 func TestTrimBearerToken(t *testing.T) {
-
-	log.Info().Caller().Msg("Start TestTrimBearerToken().")
-	defer log.Info().Msg("End TestTrimBearerToken().")
-
 	assert := assert.New(t)
 
 	tests := []struct {

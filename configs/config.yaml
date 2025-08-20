@@ -1,5 +1,5 @@
 log:
-  level: 1 # 0 - debug, 1 - info, 2 - warn, 3 - error, -1 trace (exposes sensitive data)
+  level: 0 # 0 - debug, 1 - info, 2 - warn, 3 - error, -1 trace (exposes sensitive data)
   log_tokens: false # log tokens in debug mode
 
 web:

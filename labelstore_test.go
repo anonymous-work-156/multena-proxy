@@ -9,9 +9,6 @@ import (
 
 func TestGetLabelsCM(t *testing.T) {
 
-	log.Info().Caller().Msg("Start TestGetLabelsCM().")
-	defer log.Info().Msg("End TestGetLabelsCM().")
-
 	// linear (original) CM format
 	configMapLinear := ConfigMapHandler{
 		labels: map[string]map[string]bool{
@@ -140,9 +137,6 @@ func TestGetLabelsCM(t *testing.T) {
 
 func TestGetLabelsLinearCM(t *testing.T) {
 
-	log.Info().Caller().Msg("Start TestGetLabelsLinearCM().")
-	defer log.Info().Msg("End TestGetLabelsLinearCM().")
-
 	cases := []struct {
 		name     string
 		username string
@@ -216,9 +210,6 @@ func TestGetLabelsLinearCM(t *testing.T) {
 }
 
 func TestGetLabelsNestedCM(t *testing.T) {
-
-	log.Info().Caller().Msg("Start TestGetLabelsNestedCM().")
-	defer log.Info().Msg("End TestGetLabelsNestedCM().")
 
 	cases := []struct {
 		name     string

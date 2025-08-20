@@ -109,7 +109,7 @@ func validateLabels(token OAuthToken, a *App) ([]string, bool, error) {
 		log.Debug().Str("user", token.PreferredUsername).Bool("Admin", false).Msg("Skipping label enforcement (due to label configuration)")
 		return nil, true, nil
 	}
-	log.Debug().Str("user", token.PreferredUsername).Strs("labels", tenantLabels).Msg("")
+	log.Debug().Str("user", token.PreferredUsername).Strs("labels", tenantLabels).Msg("Resulting labels in validateLabels().")
 
 	if len(tenantLabels) < 1 {
 		return nil, false, fmt.Errorf("no tenant labels are configured for the user") // FIXME: this error is badly formatted, and sometimes unhelpful

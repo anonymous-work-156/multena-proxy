@@ -9,9 +9,6 @@ import (
 
 func Test_promqlEnforcer(t *testing.T) {
 
-	log.Info().Caller().Msg("Start Test_promqlEnforcer().")
-	defer log.Info().Msg("End Test_promqlEnforcer().")
-
 	type args struct {
 		query                     string
 		allowedTenantLabelValues  []string

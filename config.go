@@ -106,7 +106,7 @@ func (a *App) WithConfig() *App {
 		log.Fatal().Err(err).Msg("Failed to parse config file.")
 	}
 
-	zerolog.SetGlobalLevel(zerolog.Level(a.Cfg.Log.Level))
+	zerolog.SetGlobalLevel(zerolog.Level(a.Cfg.Log.Level)) // for test cases, might keep the default logging level on debug or trace
 	log.Info().Msg("Config is loaded.")
 	log.Info().Any("config", a.Cfg).Msg("") // a.Cfg.Thanos.MetricsTenantOptional can be quite long
 	return a

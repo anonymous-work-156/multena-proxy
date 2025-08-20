@@ -3,14 +3,10 @@ package main
 import (
 	"testing"
 
-	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestCheckNonenforcementHeader(t *testing.T) {
-	log.Info().Caller().Msg("Start TestCheckNonenforcementHeader().")
-	defer log.Info().Msg("End TestCheckNonenforcementHeader().")
-
 	a := assert.New(t)
 
 	app := &App{}
