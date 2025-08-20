@@ -52,7 +52,7 @@ func makeTestApp(jwksServer, upstreamServer *httptest.Server, errorOnIllegalTena
 
 	app.Cfg.Admin.HeaderBypass = headerBypass
 	if headerBypass {
-		app.Cfg.Admin.Header.Key = "MAGICHEADER"
+		app.Cfg.Admin.Header.Key = "MagicHeader"
 		app.Cfg.Admin.Header.Value = "notaverygoodsecret"
 	}
 
@@ -258,7 +258,7 @@ func Test_reverseProxy(t *testing.T) {
 			baseName:           "missing_auth_header",
 			URL:                "/api/v1/query_range",
 			noSetAuthorization: true,
-			header:             TestHeader{key: "MAGICHEADER", val: "notaverygoodsecret"}, // one app should pass due to this
+			header:             TestHeader{key: "MagicHeader", val: "notaverygoodsecret"}, // one app should pass due to this
 			expectedResults: []ExpectedResult{
 				{
 					matchingApp: "*",
@@ -276,7 +276,7 @@ func Test_reverseProxy(t *testing.T) {
 			baseName:            "malformed_auth_header_1",
 			URL:                 "/api/v1/query_range",
 			authorizationHeader: "B",
-			header:              TestHeader{key: "MAGICHEADER", val: "notaverygoodsecret"}, // one app should pass due to this
+			header:              TestHeader{key: "MagicHeader", val: "notaverygoodsecret"}, // one app should pass due to this
 			expectedResults: []ExpectedResult{
 				{
 					matchingApp: "*",
@@ -294,7 +294,7 @@ func Test_reverseProxy(t *testing.T) {
 			baseName:            "malformed_auth_header_2",
 			URL:                 "/api/v1/query_range",
 			authorizationHeader: "Bearer ",
-			header:              TestHeader{key: "MAGICHEADER", val: "notaverygoodsecret"}, // one app should pass due to this
+			header:              TestHeader{key: "MagicHeader", val: "notaverygoodsecret"}, // one app should pass due to this
 			expectedResults: []ExpectedResult{
 				{
 					matchingApp: "*",
@@ -312,7 +312,7 @@ func Test_reverseProxy(t *testing.T) {
 			baseName:            "malformed_headers_1",
 			URL:                 "/api/v1/query_range",
 			authorizationHeader: "Bearer skk",
-			header:              TestHeader{key: "MAGICHEADER", val: "wrong"},
+			header:              TestHeader{key: "MagicHeader", val: "wrong"},
 			expectedResults: []ExpectedResult{
 				{
 					matchingApp: "*",
@@ -325,7 +325,7 @@ func Test_reverseProxy(t *testing.T) {
 			baseName:            "malformed_headers_2",
 			URL:                 "/api/v1/query_range",
 			authorizationHeader: "Bearer abc def",
-			header:              TestHeader{key: "MAGICHEADER", val: ""},
+			header:              TestHeader{key: "MagicHeader", val: ""},
 			expectedResults: []ExpectedResult{
 				{
 					matchingApp: "*",
@@ -337,7 +337,8 @@ func Test_reverseProxy(t *testing.T) {
 		{
 			baseName:            "user_in_token_is_invalid_1",
 			URL:                 "/api/v1/query_range",
-			authorizationHeader: "Bearer " + tokens["invalidTenant"], // token configured with user name which is not in config store
+			authorizationHeader: "Bearer " + tokens["invalidTenant"],                       // token configured with user name which is not in config store
+			header:              TestHeader{key: "MagicHeader", val: "notaverygoodsecret"}, // one app should pass due to this
 			expectedResults: []ExpectedResult{
 				{
 					matchingApp: "*",
@@ -355,6 +356,7 @@ func Test_reverseProxy(t *testing.T) {
 			baseName:            "user_in_token_is_invalid_2",
 			URL:                 `/api/v1/query_range?query=up{tenant_id="forbidden_tenant"}`, // there is no value for tenant_id that should work
 			authorizationHeader: "Bearer " + tokens["invalidTenant"],                          // token configured with user name which is not in config store
+			header:              TestHeader{key: "MagicHeader", val: "notaverygoodsecret"},    // one app should pass due to this
 			expectedResults: []ExpectedResult{
 				{
 					matchingApp: "*",
@@ -396,7 +398,7 @@ func Test_reverseProxy(t *testing.T) {
 					body:        `{"status":"error","errorType":"bad_data","error": "unauthorized tenant label value"}` + "\n",
 				},
 				{
-					matchingApp: "header",
+					matchingApp: "group_or_header",
 					status:      http.StatusOK,
 					body:        "< fake upstream server response >\n",
 				},
@@ -418,7 +420,7 @@ func Test_reverseProxy(t *testing.T) {
 					body:        `{"status":"error","errorType":"bad_data","error": "unauthorized tenant label value"}` + "\n",
 				},
 				{
-					matchingApp: "header",
+					matchingApp: "group_or_header",
 					status:      http.StatusOK,
 					body:        "< fake upstream server response >\n",
 				},
@@ -440,7 +442,7 @@ func Test_reverseProxy(t *testing.T) {
 					body:        `{"status":"error","errorType":"bad_data","error": "no tenant label values matched"}` + "\n",
 				},
 				{
-					matchingApp: "header",
+					matchingApp: "group_or_header",
 					status:      http.StatusOK,
 					body:        "< fake upstream server response >\n",
 				},
@@ -566,12 +568,17 @@ func Test_reverseProxy(t *testing.T) {
 			baseName:            "invalid_magic_value_bypass_with_magic_header",
 			URL:                 `/api/v1/query?query=count(count({__name__!="",tenant_id="bob"}) by (__name__))`, // without the magic value, tenant is checked
 			authorizationHeader: "Bearer " + tokens["invalidMagicBypassTenant"],
-			header:              TestHeader{key: "MAGICHEADER", val: "notaverygoodsecret"},
+			header:              TestHeader{key: "MagicHeader", val: "notaverygoodsecret"},
 			expectedResults: []ExpectedResult{
 				{
 					matchingApp: "*",
 					status:      http.StatusForbidden,
 					body:        "no tenant labels are configured for the user",
+				},
+				{
+					matchingApp: "group_or_header",
+					status:      http.StatusOK,
+					body:        "< fake upstream server response >\n",
 				},
 			},
 		},
@@ -668,9 +675,13 @@ func Test_reverseProxy(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
+
 				// Set headers based on the test case.
 				if !tc.noSetAuthorization {
 					req.Header.Add("Authorization", tc.authorizationHeader)
+				}
+				if tc.header.key != "" {
+					req.Header.Add(tc.header.key, tc.header.val)
 				}
 
 				// Prepare the response recorder
@@ -693,9 +704,7 @@ func Test_reverseProxy(t *testing.T) {
 						}
 					}
 				}
-				if expectedResults.matchingApp == "" {
-					log.Warn().Msg("We have apparently not found what results are expected for this test.")
-				}
+				log.Info().Str("Testcase result matcher", expectedResults.matchingApp).Msg("")
 
 				// Check the status code
 				happy := assert.Equal(t, expectedResults.status, rr.Code)

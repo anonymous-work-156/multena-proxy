@@ -142,7 +142,7 @@ func handler(matchWord string, enforcer EnforceQL, dsURL string, tls bool, heade
 		log.Fatal().Err(err).Str("url", dsURL).Msg("Error parsing URL")
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
-		skip := checkNonenforcementHeader(headers, a.Cfg)
+		skip := checkNonenforcementHeader(r, a.Cfg)
 
 		if !skip {
 			oauthToken, err := getToken(r, a)
@@ -174,12 +174,12 @@ func handler(matchWord string, enforcer EnforceQL, dsURL string, tls bool, heade
 
 // checkAdminHeader checks to see if the request contains a header and value which indicate we should skip enforcement.
 // The target header key must not be blank, it must be present in the request, and the value must not be blank.
-func checkNonenforcementHeader(headers map[string]string, cfg *Config) bool {
+func checkNonenforcementHeader(r *http.Request, cfg *Config) bool {
 	if !cfg.Admin.HeaderBypass || cfg.Admin.Header.Key == "" {
 		log.Debug().Msg("Header-based bypass is not enabled.")
 		return false
 	}
-	obsHeaderVal := headers[cfg.Admin.Header.Key]
+	obsHeaderVal := r.Header.Get(cfg.Admin.Header.Key)
 	if obsHeaderVal != "" && obsHeaderVal == cfg.Admin.Header.Value {
 		log.Debug().Msg("Header indicates that we can skip enforcement.")
 		return true
