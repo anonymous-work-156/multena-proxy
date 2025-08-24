@@ -1,4 +1,4 @@
-# Multena Proxy (forked)
+# *(forked)* Multena Proxy *(forked)*
 
 Making the LGTM-Stack **mul**ti **tena**ncy ready.
 
@@ -7,15 +7,9 @@ Making the LGTM-Stack **mul**ti **tena**ncy ready.
 Grafana Tempo Mimir(Prometheus Style API / OpenMetrics)) stack. Built with LBAC (Label Based Access Control) at its
 core.
 
-Multena provides secure and granular user authorization based on assigned tenant labels.
-It integrates seamlessly with PrometheusAPI and Loki, and
-should support generic oauth provider for identity management. With features like ConfigMap-based configuration,
-flexible authorization providers, and multiple tenant labels, Multena ensures that the right data is accessible to the
-right users.
+## Forked
 
-# Forked
-
-This is a fork to meet some (expanding) internal requirements, see the [upstream repo](https://github.com/gepaplexx/multena-proxy) for a proper world view.
+This is a fork to meet some (expanding) internal requirements, see the [upstream repo](https://github.com/gepaplexx/multena-proxy) for a proper world view from the original authors.
 
 Our changes (at the time of this writing) are basically:
 1.  Configure the HTTP header in which the JWT arrives
@@ -29,4 +23,8 @@ Our changes (at the time of this writing) are basically:
 9.  Extended test cases
 10. Rephrase and reformat some error messages
 
-As time has passed, an notable percentage of the total code has been replaced.
+As time has passed, a notable percentage of the total code has been replaced.
+
+## Relevance now that Grafana supports LBAC
+
+Grafana itself now [supports label-based access control](https://grafana.com/docs/grafana/latest/administration/data-source-management/teamlbac/), however gaining access to the functionality appears to be expensive if you operate at some scale.  Its not very difficult or expensive to run a proxy that may meet your LBAC needs.
