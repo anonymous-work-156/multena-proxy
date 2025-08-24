@@ -37,11 +37,11 @@ func enforceGet(r *http.Request, enforce EnforceQL, allowedTenantLabelValues []s
 	if err != nil {
 		return err
 	}
-	log.Trace().Any("url", r.URL).Msg("pre-enforced url")
+	log.Trace().Any("URL", r.URL).Msg("pre-enforced URL")
 	values := r.URL.Query()
 	values.Set(matchWord, query)
 	r.URL.RawQuery = values.Encode()
-	log.Trace().Any("url", r.URL).Msg("post-enforced url")
+	log.Trace().Any("URL", r.URL).Msg("post-enforced URL")
 
 	r.Body = io.NopCloser(strings.NewReader(""))
 	r.ContentLength = 0

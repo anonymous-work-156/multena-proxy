@@ -41,7 +41,7 @@ func Test_reverseProxy(t *testing.T) {
 			expectedResults: []ExpectedResult{{
 				matchingApp: "*",
 				status:      http.StatusNotFound,
-				body:        "not a registered route\n", // we hope to hit our logEverythingElseHandler
+				body:        "not a registered route", // we hope to hit our logEverythingElseHandler
 			}},
 		},
 		{
@@ -52,7 +52,7 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusForbidden,
-					body:        "got no value for the HTTP header which is expected to contain the JWT\n",
+					body:        "got no value for the HTTP header which is expected to contain the JWT",
 				},
 			},
 		},
@@ -65,12 +65,12 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusForbidden,
-					body:        "got no value for the HTTP header which is expected to contain the JWT\n",
+					body:        "got no value for the HTTP header which is expected to contain the JWT",
 				},
 				{
 					matchingApp: "group_or_header",
 					status:      http.StatusOK,
-					body:        "< fake upstream server response >\n",
+					body:        "< fake upstream server response >",
 				},
 			},
 		},
@@ -83,12 +83,12 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusForbidden,
-					body:        "failed to remove the bearer prefix from the JWT\n",
+					body:        "failed to remove the bearer prefix from the JWT",
 				},
 				{
 					matchingApp: "group_or_header",
 					status:      http.StatusOK,
-					body:        "< fake upstream server response >\n",
+					body:        "< fake upstream server response >",
 				},
 			},
 		},
@@ -101,12 +101,12 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusForbidden,
-					body:        "error parsing token\n",
+					body:        "error parsing token",
 				},
 				{
 					matchingApp: "group_or_header",
 					status:      http.StatusOK,
-					body:        "< fake upstream server response >\n",
+					body:        "< fake upstream server response >",
 				},
 			},
 		},
@@ -119,7 +119,7 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusForbidden,
-					body:        "error parsing token\n",
+					body:        "error parsing token",
 				},
 			},
 		},
@@ -132,7 +132,7 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusForbidden,
-					body:        "error parsing token\n",
+					body:        "error parsing token",
 				},
 			},
 		},
@@ -145,12 +145,12 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusForbidden,
-					body:        "no tenant labels are configured for the user\n",
+					body:        "no tenant labels are configured for the user",
 				},
 				{
 					matchingApp: "group_or_header",
 					status:      http.StatusOK,
-					body:        "< fake upstream server response >\n",
+					body:        "< fake upstream server response >",
 				},
 			},
 		},
@@ -163,12 +163,12 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusForbidden,
-					body:        "no tenant labels are configured for the user\n",
+					body:        "no tenant labels are configured for the user",
 				},
 				{
 					matchingApp: "group_or_header",
 					status:      http.StatusOK,
-					body:        "< fake upstream server response >\n",
+					body:        "< fake upstream server response >",
 				},
 			},
 		},
@@ -180,7 +180,7 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusOK,
-					body:        "< fake upstream server response >\n",
+					body:        "< fake upstream server response >",
 				},
 			},
 		},
@@ -197,12 +197,12 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "bad_tenant_intolerant",
 					status:      http.StatusForbidden,
-					body:        `{"status":"error","errorType":"bad_data","error": "unauthorized tenant label value"}` + "\n",
+					body:        `{"status":"error","errorType":"bad_data","error": "unauthorized tenant label value"}`,
 				},
 				{
 					matchingApp: "group_or_header",
 					status:      http.StatusOK,
-					body:        "< fake upstream server response >\n",
+					body:        "< fake upstream server response >",
 				},
 			},
 		},
@@ -219,12 +219,12 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "bad_tenant_intolerant",
 					status:      http.StatusForbidden,
-					body:        `{"status":"error","errorType":"bad_data","error": "unauthorized tenant label value"}` + "\n",
+					body:        `{"status":"error","errorType":"bad_data","error": "unauthorized tenant label value"}`,
 				},
 				{
 					matchingApp: "group_or_header",
 					status:      http.StatusOK,
-					body:        "< fake upstream server response >\n",
+					body:        "< fake upstream server response >",
 				},
 			},
 		},
@@ -241,12 +241,12 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "bad_tenant_intolerant",
 					status:      http.StatusForbidden,
-					body:        `{"status":"error","errorType":"bad_data","error": "no tenant label values matched"}` + "\n",
+					body:        `{"status":"error","errorType":"bad_data","error": "no tenant label values matched"}`,
 				},
 				{
 					matchingApp: "group_or_header",
 					status:      http.StatusOK,
-					body:        "< fake upstream server response >\n",
+					body:        "< fake upstream server response >",
 				},
 			},
 		},
@@ -258,7 +258,7 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusOK,
-					body:        "< fake upstream server response >\n",
+					body:        "< fake upstream server response >",
 				},
 			},
 		},
@@ -270,7 +270,7 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusOK,
-					body:        "< fake upstream server response >\n",
+					body:        "< fake upstream server response >",
 				},
 			},
 		},
@@ -282,7 +282,7 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusOK,
-					body:        "< fake upstream server response >\n",
+					body:        "< fake upstream server response >",
 				},
 			},
 		},
@@ -294,7 +294,41 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusOK,
-					body:        "< fake upstream server response >\n",
+					body:        "< fake upstream server response >",
+				},
+			},
+		},
+		{
+			baseName:            "admin_bypass_from_config",
+			URL:                 `/api/v1/query?query=some_metric{tenant_id="whocaresweretheadmin"} != 1337`,
+			authorizationHeader: "Bearer " + tokens["adminBypassTenant"],
+			expectedResults: []ExpectedResult{
+				{
+					matchingApp: "*",
+					status:      http.StatusOK,
+					body:        "< fake upstream server response >",
+				},
+				{
+					matchingApp: "only_magic_val",
+					status:      http.StatusForbidden,
+					body:        "no tenant labels are configured for the user",
+				},
+			},
+		},
+		{
+			baseName:            "admin_bypass_from_nested_labelstore",
+			URL:                 `/api/v1/query?query=some_metric{tenant_id="whocaresweretheadmin"} != 1337`,
+			authorizationHeader: "Bearer " + tokens["nestedBypassTenant"],
+			expectedResults: []ExpectedResult{
+				{
+					matchingApp: "*",
+					status:      http.StatusForbidden,
+					body:        "no tenant labels are configured for the user",
+				},
+				{
+					matchingApp: "bad_tenant_tolerant_nested",
+					status:      http.StatusOK,
+					body:        "< fake upstream server response >",
 				},
 			},
 		},
@@ -311,12 +345,17 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "only_magic_val",
 					status:      http.StatusOK,
-					body:        "< fake upstream server response >\n",
+					body:        "< fake upstream server response >",
 				},
 				{
 					matchingApp: "bad_tenant_intolerant",
 					status:      http.StatusForbidden,
-					body:        `{"status":"error","errorType":"bad_data","error": "unauthorized tenant label value"}` + "\n",
+					body:        `{"status":"error","errorType":"bad_data","error": "unauthorized tenant label value"}`,
+				},
+				{
+					matchingApp: "bad_tenant_tolerant_nested",
+					status:      http.StatusForbidden,
+					body:        "no tenant labels are configured for the user",
 				},
 			},
 		},
@@ -333,7 +372,12 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "only_magic_val",
 					status:      http.StatusOK,
-					body:        "< fake upstream server response >\n",
+					body:        "< fake upstream server response >",
+				},
+				{
+					matchingApp: "bad_tenant_tolerant_nested",
+					status:      http.StatusForbidden,
+					body:        "no tenant labels are configured for the user",
 				},
 			},
 		},
@@ -350,7 +394,7 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "bad_tenant_intolerant",
 					status:      http.StatusForbidden,
-					body:        `{"status":"error","errorType":"bad_data","error": "unauthorized tenant label value"}` + "\n",
+					body:        `{"status":"error","errorType":"bad_data","error": "unauthorized tenant label value"}`,
 				},
 			},
 		},
@@ -380,7 +424,7 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "group_or_header",
 					status:      http.StatusOK,
-					body:        "< fake upstream server response >\n",
+					body:        "< fake upstream server response >",
 				},
 			},
 		},
@@ -455,12 +499,17 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "only_magic_val",
 					status:      http.StatusOK,
-					body:        "< fake upstream server response >\n",
+					body:        "< fake upstream server response >",
 				},
 				{
 					matchingApp: "bad_tenant_intolerant",
 					status:      http.StatusForbidden,
 					body:        "unauthorized tenant label value",
+				},
+				{
+					matchingApp: "bad_tenant_tolerant_nested",
+					status:      http.StatusForbidden,
+					body:        "no tenant labels are configured for the user",
 				},
 			},
 		},
@@ -472,7 +521,7 @@ func Test_reverseProxy(t *testing.T) {
 			t.Run(tc.name, func(t *testing.T) {
 
 				// Create a request
-				log.Debug().Str("URL", tc.URL).Str("Authorization", tc.authorizationHeader).Msg("Request")
+				log.Debug().Str("URL", tc.URL).Str("Authorization", tc.authorizationHeader).Msg("Test request")
 				req, err := http.NewRequest("GET", tc.URL, nil)
 				if err != nil {
 					t.Fatal(err)

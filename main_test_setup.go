@@ -25,7 +25,7 @@ func genJWKS(username, email string, groups []string, pk *ecdsa.PrivateKey) (str
 	return token.SignedString(pk)
 }
 
-func makeTestApp(jwksServer, upstreamServer *httptest.Server, errorOnIllegalTenantValue bool, adminGroup bool, magicValueBypass bool, headerBypass bool) App {
+func makeTestApp(jwksServer, upstreamServer *httptest.Server, cmh *ConfigMapHandler, errorOnIllegalTenantValue bool, adminGroup bool, magicValueBypass bool, headerBypass bool) App {
 	app := App{}
 	app.WithConfig() // note: sets logging level based on config.yaml
 	app.Cfg.Web.JwksCertURL = jwksServer.URL
@@ -40,12 +40,12 @@ func makeTestApp(jwksServer, upstreamServer *httptest.Server, errorOnIllegalTena
 
 	app.Cfg.Admin.GroupBypass = adminGroup
 	if adminGroup {
-		app.Cfg.Admin.Group = "admingroupname" // admingroupname matches tenant defined in setupReverseProxyTest()
+		app.Cfg.Admin.Group = "magic-admin-in-config" // magic-admin-in-config matches tenant defined in setupReverseProxyTest()
 	}
 
 	app.Cfg.Admin.MagicValueBypass = magicValueBypass
 	if magicValueBypass {
-		app.Cfg.Admin.MagicValue = "<(magicadminvalue)>" // <(magicadminvalue)> matches user defined below
+		app.Cfg.Admin.MagicValue = "#cluster-wide" // #cluster-wide is associated with a user in ConfigMapHandler
 	}
 
 	app.Cfg.Admin.HeaderBypass = headerBypass
@@ -54,19 +54,7 @@ func makeTestApp(jwksServer, upstreamServer *httptest.Server, errorOnIllegalTena
 		app.Cfg.Admin.Header.Value = "notaverygoodsecret"
 	}
 
-	// this is our config defining what tenant label values are valid for the test cases
-	// the tenant label name is set above (to "tenant_id")
-	// this is the linear (original) CM format, see labelstore_test.go for an inline example of each format
-	cmh := ConfigMapHandler{
-		labels: map[string]map[string]bool{
-			"valid-user":       {"tenant_id_u1": true, "tenant_id_u2": true},
-			"valid-user-magic": {"tenant_id_u1": true, "tenant_id_u2": true, "<(magicadminvalue)>": true},
-			"group1":           {"tenant_id_g1": true, "tenant_id_g2": true},
-			"group2":           {"tenant_id_g3": true, "tenant_id_g4": true},
-		},
-	}
-
-	app.LabelStore = &cmh
+	app.LabelStore = cmh
 	app.WithRoutes()
 
 	return app
@@ -111,57 +99,63 @@ func setupReverseProxyTest() (map[string]App, map[string]string) {
 	}{
 		{
 			name:     "invalidTenant",
-			Username: "not-a-valid-user",
-			Email:    "test-email",
+			Username: "user-not-in-config",
+			Email:    "not.used@for.anything",
 			Groups:   []string{},
 		},
 		{
 			name:     "invalidTenantWithGroups",
-			Username: "not-a-valid-user",
-			Email:    "test-email",
+			Username: "user-not-in-config",
+			Email:    "not.used@for.anything",
 			Groups:   []string{"invalid-group1", "invalid-group2"},
 		},
 		{
 			name:     "userTenant",
-			Username: "valid-user", // defined as a valid user in CM in makeTestApp()
-			Email:    "test-email",
+			Username: "user-in-config", // defined as a valid user in ConfigMapHandler
+			Email:    "not.used@for.anything",
 			Groups:   []string{},
 		},
 		{
 			name:     "groupTenant",
-			Username: "not-a-valid-user",
-			Email:    "test-email",
-			Groups:   []string{"group1"}, // defined as a valid group in CM in makeTestApp()
+			Username: "user-not-in-config",
+			Email:    "not.used@for.anything",
+			Groups:   []string{"group1"}, // defined as a valid group in CM in ConfigMapHandler
 		},
 		{
 			name:     "twoGroupsTenant",
-			Username: "not-a-valid-user",
-			Email:    "test-email",
-			Groups:   []string{"group1", "group2"}, // defined as two valid groups in CM in makeTestApp()
+			Username: "user-not-in-config",
+			Email:    "not.used@for.anything",
+			Groups:   []string{"group1", "group2"}, // defined as two valid groups in CM in ConfigMapHandler
 		},
 		{
 			name:     "userAndGroupTenant",
-			Username: "valid-user", // defined as a valid user in CM in makeTestApp()
-			Email:    "test-email",
-			Groups:   []string{"group1", "group2"}, // defined as two valid groups in CM in makeTestApp()
+			Username: "user-in-config", // defined as a valid user in CM in ConfigMapHandler
+			Email:    "not.used@for.anything",
+			Groups:   []string{"group1", "group2"}, // defined as two valid groups in CM in ConfigMapHandler
 		},
 		{
 			name:     "adminBypassTenant",
-			Username: "adminuser",
-			Email:    "test-email",
-			Groups:   []string{"admingroupname", "group1", "group2"}, // admingroupname matches group set in makeTestApp()
+			Username: "adminuser-not-in-config",
+			Email:    "not.used@for.anything",
+			Groups:   []string{"magic-admin-in-config", "group-not-defined", "group-also-not-defined"}, // magic-admin-in-config matches group set in main config
+		},
+		{
+			name:     "nestedBypassTenant",
+			Username: "adminuser-not-in-config",
+			Email:    "not.used@for.anything",
+			Groups:   []string{"admin-in-config", "group-not-defined", "group-also-not-defined"}, // admin-in-config matches group set in nested ConfigMapHandler
 		},
 		{
 			name:     "magicBypassTenant",
-			Username: "valid-user-magic", // defined as a valid user in CM in makeTestApp() with magic value access
-			Email:    "test-email",
-			Groups:   []string{"whatever", "something"},
+			Username: "bypass-admin-in-config", // defined as a valid user in CM in ConfigMapHandler with magic value access
+			Email:    "not.used@for.anything",
+			Groups:   []string{"whatever", "something"}, // these groups are not assigned to label values in ConfigMapHandler, therefore unusable
 		},
 		{
 			name:     "invalidMagicBypassTenant",
-			Username: "invalid-user",
-			Email:    "test-email",
-			Groups:   []string{"<(magicadminvalue)>"}, // <(magicadminvalue)> matches value set in makeTestApp(), expected to not work here
+			Username: "user-not-in-config",
+			Email:    "not.used@for.anything",
+			Groups:   []string{"#cluster-wide"}, // #cluster-wide matches value set in makeTestApp() but not in a useful way
 		},
 	}
 	tokens := make(map[string]string, len(jwks))
@@ -175,32 +169,73 @@ func setupReverseProxyTest() (map[string]App, map[string]string) {
 	y := base64.RawURLEncoding.EncodeToString(pubkey.Y.Bytes())
 
 	// Set up the JWKS server
-	jwksServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Info().Msg("Fake JWKS server sending response.")
-		_, err := fmt.Fprintf(w, `{"keys":[{"kty":"EC","kid":"testKid","alg":"ES256","use":"sig","x":"%s","y":"%s","crv":"P-256"}]}`, x, y)
-		if err != nil {
-			log.Error().Msg("Some kind of error in the fake JWKS server.")
-			return // we are in a test server, do nothing with the error
-		}
-	}))
-	// defer jwksServer.Close()
+	jwksServer := httptest.NewServer(
+		http.HandlerFunc(
+			func(w http.ResponseWriter, r *http.Request) {
+				log.Info().Msg("Fake JWKS server sending response.")
+				_, err := fmt.Fprintf(w, `{"keys":[{"kty":"EC","kid":"testKid","alg":"ES256","use":"sig","x":"%s","y":"%s","crv":"P-256"}]}`, x, y)
+				if err != nil {
+					log.Error().Msg("Some kind of error in the fake JWKS server.")
+					return // we are in a test server, do nothing with the error
+				}
+			},
+		),
+	)
 
 	// Set up the upstream server
-	upstreamServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Info().Msg("Fake metrics/logs server sending response.")
-		_, err := fmt.Fprintln(w, "< fake upstream server response >")
-		if err != nil {
-			log.Error().Msg("Some kind of error in the fake metrics/logs server.")
-			return // we are in a test server, do nothing with the error
-		}
-	}))
-	// defer upstreamServer.Close()
+	upstreamServer := httptest.NewServer(
+		http.HandlerFunc(
+			func(w http.ResponseWriter, r *http.Request) {
+				log.Info().Msg("Fake metrics/logs server sending response.")
+				_, err := fmt.Fprintln(w, "< fake upstream server response >")
+				if err != nil {
+					log.Error().Msg("Some kind of error in the fake metrics/logs server.")
+					return // we are in a test server, do nothing with the error
+				}
+			},
+		),
+	)
+	log.Debug().Str("Test server upstreamServer.URL", upstreamServer.URL).Msg("")
+
+	// this is our config defining what tenant label values are valid for the test cases
+	// the tenant label name is set above (to "tenant_id")
+	cmh_linear := ConfigMapHandler{
+		labels: map[string]map[string]bool{
+			"user-in-config":         {"tenant_id_u1": true, "tenant_id_u2": true},
+			"bypass-admin-in-config": {"tenant_id_u1": true, "tenant_id_u2": true, "#cluster-wide": true},
+			"group1":                 {"tenant_id_g1": true, "tenant_id_g2": true},
+			"group2":                 {"tenant_id_g3": true, "tenant_id_g4": true},
+		},
+	}
+	cmh_nested := ConfigMapHandler{
+		nestedLabels: &NestedLabelConfig{
+			Admins: []string{"admin-in-config"},
+			Solutions: []InnerNestedLabelConfig{
+				{
+					Name:         "user area",
+					FilterValues: []string{"tenant_id_u1", "tenant_id_u2"},
+					Groups:       []string{"user-in-config"},
+				},
+				{
+					Name:         "group1 area",
+					FilterValues: []string{"tenant_id_g1", "tenant_id_g2"},
+					Groups:       []string{"group1"},
+				},
+				{
+					Name:         "group2 area",
+					FilterValues: []string{"tenant_id_g3", "tenant_id_g4"},
+					Groups:       []string{"group2"},
+				},
+			},
+		},
+	}
 
 	appmap := map[string]App{
-		"bad_tenant_tolerant":   makeTestApp(jwksServer, upstreamServer, false, true, false, false),
-		"bad_tenant_intolerant": makeTestApp(jwksServer, upstreamServer, true, true, false, false),
-		"only_magic_val":        makeTestApp(jwksServer, upstreamServer, false, false, true, false),
-		"group_or_header":       makeTestApp(jwksServer, upstreamServer, false, true, false, true),
+		"bad_tenant_tolerant":        makeTestApp(jwksServer, upstreamServer, &cmh_linear, false, true, false, false),
+		"bad_tenant_tolerant_nested": makeTestApp(jwksServer, upstreamServer, &cmh_nested, false, true, false, false),
+		"bad_tenant_intolerant":      makeTestApp(jwksServer, upstreamServer, &cmh_linear, true, true, false, false),
+		"only_magic_val":             makeTestApp(jwksServer, upstreamServer, &cmh_linear, false, false, true, false),
+		"group_or_header":            makeTestApp(jwksServer, upstreamServer, &cmh_linear, false, true, false, true),
 	}
 	return appmap, tokens
 }

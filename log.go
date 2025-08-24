@@ -38,7 +38,6 @@ func (a *App) loggingMiddleware(next http.Handler) http.Handler {
 		} else {
 			bodyBytes = []byte("[REDACTED]")
 		}
-		// log.Trace().Any("Request", r.Headers).Msg("")
 		logRequestData(r, bodyBytes, a.Cfg.Log.LogTokens)
 		next.ServeHTTP(w, r)
 
@@ -78,7 +77,8 @@ func logRequestData(r *http.Request, bodyBytes []byte, logToken bool) {
 		log.Error().Err(err).Msg("Error while marshalling request")
 		return
 	}
-	log.Trace().Str("verb", r.Method).Str("request", string(jsonData)).Str("path", r.URL.Path).Msg("")
+
+	log.Trace().Str("request", string(jsonData)).Msg("") // logs the headers
 }
 
 // cleanSensitiveHeaders creates and returns a copy of the provided HTTP headers with sensitive headers removed.
@@ -88,7 +88,7 @@ func cleanSensitiveHeaders(headers http.Header) http.Header {
 	for k, v := range headers {
 		copyHeader[k] = v
 	}
-	copyHeader.Del("Authorization")
+	copyHeader.Del("Authorization") // note to self: doesn't actually seem to strip the headers
 	copyHeader.Del("X-Plugin-Id")
 	copyHeader.Del("X-Id-Token")
 	return copyHeader

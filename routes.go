@@ -144,7 +144,9 @@ func handler(matchWord string, enforcer EnforceQL, dsURL string, tls bool, heade
 	return func(w http.ResponseWriter, r *http.Request) {
 		skip := checkNonenforcementHeader(r, a.Cfg)
 
-		if !skip {
+		if skip {
+			r.URL.RawQuery = r.URL.Query().Encode()
+		} else {
 			oauthToken, err := getToken(r, a)
 			if err != nil {
 				logAndWriteError(w, http.StatusForbidden, err, "")
@@ -159,6 +161,7 @@ func handler(matchWord string, enforcer EnforceQL, dsURL string, tls bool, heade
 
 			if skip || matchWord == "" {
 				log.Debug().Msg("No label enforcement.")
+				r.URL.RawQuery = r.URL.Query().Encode()
 			} else {
 				err = enforceRequest(r, enforcer, labels, matchWord, a.Cfg)
 				if err != nil {
@@ -168,6 +171,7 @@ func handler(matchWord string, enforcer EnforceQL, dsURL string, tls bool, heade
 			}
 		}
 
+		//log.Debug().Any("r", r.URL).Any("r.ContentLength", r.ContentLength).Any("r.URL.RawQuery", r.URL.RawQuery).Msg("")
 		streamUp(w, r, upstreamURL, tls, headers, a)
 	}
 }
@@ -193,6 +197,13 @@ func checkNonenforcementHeader(r *http.Request, cfg *Config) bool {
 func streamUp(w http.ResponseWriter, r *http.Request, upstreamURL *url.URL, tls bool, headers map[string]string, a *App) {
 	setHeaders(r, tls, headers, a.ServiceAccountToken)
 	proxy := httputil.NewSingleHostReverseProxy(upstreamURL)
+
+	// log the result code
+	proxy.ModifyResponse = func(res *http.Response) error {
+		log.Info().Any("Result status code from proxied server", res.StatusCode).Msg("")
+		return nil
+	}
+
 	proxy.ServeHTTP(w, r)
 }
 
