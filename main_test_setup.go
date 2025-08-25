@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/rs/zerolog/log"
@@ -182,15 +183,35 @@ func setupReverseProxyTest() (map[string]App, map[string]string) {
 		),
 	)
 
+	re1, err := regexp.Compile(`^(/[\w.-]+)+\w+$`)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to compile regex: %s\n", err))
+	}
+
+	re2, err := regexp.Compile(`^(/[\w.-]+)+\w([?&]\w+=[\w%~+-]+)+$`)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to compile regex: %s\n", err))
+	}
+
 	// Set up the upstream server
 	upstreamServer := httptest.NewServer(
 		http.HandlerFunc(
 			func(w http.ResponseWriter, r *http.Request) {
-				log.Info().Msg("Fake metrics/logs server sending response.")
+				if !(re1.MatchString(r.RequestURI) || re2.MatchString(r.RequestURI)) {
+					log.Info().Any("RequestURI", r.RequestURI).Msg("Fake metrics/logs server sending HTTP 400 response.")
+					w.WriteHeader(http.StatusBadRequest)
+					_, err := fmt.Fprint(w, "Bad Parameters")
+					if err != nil {
+						log.Error().Msg("Some kind of error in the fake metrics/logs server while writing an error.")
+					}
+					return
+				}
+
+				log.Info().Any("RequestURI", r.RequestURI).Msg("Fake metrics/logs server sending HTTP 200 response.")
+				w.WriteHeader(http.StatusOK)
 				_, err := fmt.Fprintln(w, "< fake upstream server response >")
 				if err != nil {
 					log.Error().Msg("Some kind of error in the fake metrics/logs server.")
-					return // we are in a test server, do nothing with the error
 				}
 			},
 		),

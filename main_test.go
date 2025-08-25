@@ -45,6 +45,16 @@ func Test_reverseProxy(t *testing.T) {
 			}},
 		},
 		{
+			baseName:            "crap_request",
+			URL:                 "/api/v1/query?bar=&=bad",        // should trigger the regex check in the test server
+			authorizationHeader: "Bearer " + tokens["userTenant"], // valid creds
+			expectedResults: []ExpectedResult{{
+				matchingApp: "*",
+				status:      http.StatusBadRequest, // test that our test server rejects this and that we can observe the rejection
+				body:        "Bad Parameters",
+			}},
+		},
+		{
 			baseName:           "no_headers_at_all",
 			URL:                "/api/v1/query_range",
 			noSetAuthorization: true,
@@ -192,7 +202,7 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusOK,
-					body:        "",
+					body:        "< fake upstream server response >",
 				},
 				{
 					matchingApp: "bad_tenant_intolerant",
@@ -214,7 +224,7 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusOK,
-					body:        "",
+					body:        "< fake upstream server response >",
 				},
 				{
 					matchingApp: "bad_tenant_intolerant",
@@ -236,7 +246,7 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusOK,
-					body:        "",
+					body:        "< fake upstream server response >",
 				},
 				{
 					matchingApp: "bad_tenant_intolerant",
@@ -340,11 +350,6 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusOK,
-					body:        "",
-				},
-				{
-					matchingApp: "only_magic_val",
-					status:      http.StatusOK,
 					body:        "< fake upstream server response >",
 				},
 				{
@@ -367,11 +372,6 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusOK,
-					body:        "",
-				},
-				{
-					matchingApp: "only_magic_val",
-					status:      http.StatusOK,
 					body:        "< fake upstream server response >",
 				},
 				{
@@ -389,7 +389,7 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusOK,
-					body:        "",
+					body:        "< fake upstream server response >",
 				},
 				{
 					matchingApp: "bad_tenant_intolerant",
@@ -436,7 +436,7 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusOK,
-					body:        "",
+					body:        "< fake upstream server response >",
 				},
 			},
 		},
@@ -448,7 +448,7 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusOK,
-					body:        "",
+					body:        "< fake upstream server response >",
 				},
 			},
 		},
@@ -460,7 +460,7 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusOK,
-					body:        "",
+					body:        "< fake upstream server response >",
 				},
 				{
 					matchingApp: "bad_tenant_intolerant",
@@ -477,7 +477,7 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusOK,
-					body:        "",
+					body:        "< fake upstream server response >",
 				},
 				{
 					matchingApp: "bad_tenant_intolerant",
@@ -493,11 +493,6 @@ func Test_reverseProxy(t *testing.T) {
 			expectedResults: []ExpectedResult{
 				{
 					matchingApp: "*",
-					status:      http.StatusOK,
-					body:        "",
-				},
-				{
-					matchingApp: "only_magic_val",
 					status:      http.StatusOK,
 					body:        "< fake upstream server response >",
 				},
@@ -557,13 +552,9 @@ func Test_reverseProxy(t *testing.T) {
 				}
 				log.Info().Str("Testcase result matcher", expectedResults.matchingApp).Msg("")
 
-				// Check the status code
+				// Check the status code and body
 				happy := assert.Equal(t, expectedResults.status, rr.Code)
-
-				// Check the response body
-				if expectedResults.body != "" {
-					happy = happy && assert.Contains(t, rr.Body.String(), expectedResults.body)
-				}
+				happy = happy && assert.Contains(t, rr.Body.String(), expectedResults.body)
 
 				log.Info().Bool("passed", happy).Str("name", tc.name).Str("appname", appname).Msg("Reverse proxy test")
 			})
