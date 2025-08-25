@@ -10,7 +10,10 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"regexp"
+	"sort"
+	"strings"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/rs/zerolog/log"
@@ -83,9 +86,26 @@ func makeDummyServer() func(http.ResponseWriter, *http.Request) {
 			return
 		}
 
+		values, err := url.ParseQuery(r.URL.RawQuery)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to parse the URL.")
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		keys := make([]string, 0, len(values))
+		for k := range values {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+
 		log.Info().Any("RequestURI", r.RequestURI).Msg("Fake metrics/logs server sending HTTP 200 response.")
 		w.WriteHeader(http.StatusOK)
-		_, err = fmt.Fprintln(w, "< fake upstream server response >")
+		if len(keys) == 0 {
+			_, err = fmt.Fprintln(w, "Query string did not contain parameters.")
+		} else {
+			_, err = fmt.Fprintln(w, "Query string parameter keys: "+strings.Join(keys, ","))
+		}
 		if err != nil {
 			log.Error().Msg("Some kind of error in the fake metrics/logs server.")
 		}

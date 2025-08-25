@@ -41,7 +41,7 @@ func Test_reverseProxy(t *testing.T) {
 			expectedResults: []ExpectedResult{{
 				matchingApp: "*",
 				status:      http.StatusNotFound,
-				body:        "not a registered route", // we hope to hit our logEverythingElseHandler
+				body:        "not a registered route\n", // we hope to hit our logEverythingElseHandler
 			}},
 		},
 		{
@@ -62,7 +62,7 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusForbidden,
-					body:        "got no value for the HTTP header which is expected to contain the JWT",
+					body:        "got no value for the HTTP header which is expected to contain the JWT\n",
 				},
 			},
 		},
@@ -75,12 +75,12 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusForbidden,
-					body:        "got no value for the HTTP header which is expected to contain the JWT",
+					body:        "got no value for the HTTP header which is expected to contain the JWT\n",
 				},
 				{
 					matchingApp: "group_or_header",
 					status:      http.StatusOK,
-					body:        "< fake upstream server response >",
+					body:        "Query string did not contain parameters.\n",
 				},
 			},
 		},
@@ -93,12 +93,12 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusForbidden,
-					body:        "failed to remove the bearer prefix from the JWT",
+					body:        "failed to remove the bearer prefix from the JWT\n",
 				},
 				{
 					matchingApp: "group_or_header",
 					status:      http.StatusOK,
-					body:        "< fake upstream server response >",
+					body:        "Query string did not contain parameters.\n",
 				},
 			},
 		},
@@ -111,12 +111,12 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusForbidden,
-					body:        "error parsing token",
+					body:        "error parsing token\n",
 				},
 				{
 					matchingApp: "group_or_header",
 					status:      http.StatusOK,
-					body:        "< fake upstream server response >",
+					body:        "Query string did not contain parameters.\n",
 				},
 			},
 		},
@@ -129,7 +129,7 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusForbidden,
-					body:        "error parsing token",
+					body:        "error parsing token\n",
 				},
 			},
 		},
@@ -142,7 +142,7 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusForbidden,
-					body:        "error parsing token",
+					body:        "error parsing token\n",
 				},
 			},
 		},
@@ -155,12 +155,12 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusForbidden,
-					body:        "no tenant labels are configured for the user",
+					body:        "no tenant labels are configured for the user\n",
 				},
 				{
 					matchingApp: "group_or_header",
 					status:      http.StatusOK,
-					body:        "< fake upstream server response >",
+					body:        "Query string did not contain parameters.\n",
 				},
 			},
 		},
@@ -173,12 +173,12 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusForbidden,
-					body:        "no tenant labels are configured for the user",
+					body:        "no tenant labels are configured for the user\n",
 				},
 				{
 					matchingApp: "group_or_header",
 					status:      http.StatusOK,
-					body:        "< fake upstream server response >",
+					body:        "Query string parameter keys: query\n",
 				},
 			},
 		},
@@ -190,7 +190,7 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusOK,
-					body:        "< fake upstream server response >",
+					body:        "Query string parameter keys: query\n",
 				},
 			},
 		},
@@ -202,17 +202,12 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusOK,
-					body:        "< fake upstream server response >",
+					body:        "Query string parameter keys: query\n",
 				},
 				{
 					matchingApp: "bad_tenant_intolerant",
 					status:      http.StatusForbidden,
-					body:        `{"status":"error","errorType":"bad_data","error": "unauthorized tenant label value"}`,
-				},
-				{
-					matchingApp: "group_or_header",
-					status:      http.StatusOK,
-					body:        "< fake upstream server response >",
+					body:        `{"status":"error","errorType":"bad_data","error": "unauthorized tenant label value"}` + "\n",
 				},
 			},
 		},
@@ -224,17 +219,12 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusOK,
-					body:        "< fake upstream server response >",
+					body:        "Query string parameter keys: query\n",
 				},
 				{
 					matchingApp: "bad_tenant_intolerant",
 					status:      http.StatusForbidden,
-					body:        `{"status":"error","errorType":"bad_data","error": "unauthorized tenant label value"}`,
-				},
-				{
-					matchingApp: "group_or_header",
-					status:      http.StatusOK,
-					body:        "< fake upstream server response >",
+					body:        `{"status":"error","errorType":"bad_data","error": "unauthorized tenant label value"}` + "\n",
 				},
 			},
 		},
@@ -246,17 +236,12 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusOK,
-					body:        "< fake upstream server response >",
+					body:        "Query string parameter keys: query\n",
 				},
 				{
 					matchingApp: "bad_tenant_intolerant",
 					status:      http.StatusForbidden,
-					body:        `{"status":"error","errorType":"bad_data","error": "no tenant label values matched"}`,
-				},
-				{
-					matchingApp: "group_or_header",
-					status:      http.StatusOK,
-					body:        "< fake upstream server response >",
+					body:        `{"status":"error","errorType":"bad_data","error": "no tenant label values matched"}` + "\n",
 				},
 			},
 		},
@@ -268,7 +253,7 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusOK,
-					body:        "< fake upstream server response >",
+					body:        "Query string parameter keys: query\n",
 				},
 			},
 		},
@@ -280,7 +265,7 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusOK,
-					body:        "< fake upstream server response >",
+					body:        "Query string parameter keys: query\n",
 				},
 			},
 		},
@@ -292,7 +277,7 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusOK,
-					body:        "< fake upstream server response >",
+					body:        "Query string parameter keys: query\n",
 				},
 			},
 		},
@@ -304,7 +289,7 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusOK,
-					body:        "< fake upstream server response >",
+					body:        "Query string parameter keys: query\n",
 				},
 			},
 		},
@@ -316,12 +301,12 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusOK,
-					body:        "< fake upstream server response >",
+					body:        "Query string parameter keys: query\n",
 				},
 				{
 					matchingApp: "only_magic_val",
 					status:      http.StatusForbidden,
-					body:        "no tenant labels are configured for the user",
+					body:        "no tenant labels are configured for the user\n",
 				},
 			},
 		},
@@ -333,12 +318,12 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusForbidden,
-					body:        "no tenant labels are configured for the user",
+					body:        "no tenant labels are configured for the user\n",
 				},
 				{
 					matchingApp: "bad_tenant_tolerant_nested",
 					status:      http.StatusOK,
-					body:        "< fake upstream server response >",
+					body:        "Query string parameter keys: query\n",
 				},
 			},
 		},
@@ -350,17 +335,17 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusOK,
-					body:        "< fake upstream server response >",
+					body:        "Query string parameter keys: query\n",
 				},
 				{
 					matchingApp: "bad_tenant_intolerant",
 					status:      http.StatusForbidden,
-					body:        `{"status":"error","errorType":"bad_data","error": "unauthorized tenant label value"}`,
+					body:        `{"status":"error","errorType":"bad_data","error": "unauthorized tenant label value"}` + "\n",
 				},
 				{
 					matchingApp: "bad_tenant_tolerant_nested",
 					status:      http.StatusForbidden,
-					body:        "no tenant labels are configured for the user",
+					body:        "no tenant labels are configured for the user\n",
 				},
 			},
 		},
@@ -372,12 +357,12 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusOK,
-					body:        "< fake upstream server response >",
+					body:        "Query string parameter keys: query\n",
 				},
 				{
 					matchingApp: "bad_tenant_tolerant_nested",
 					status:      http.StatusForbidden,
-					body:        "no tenant labels are configured for the user",
+					body:        "no tenant labels are configured for the user\n",
 				},
 			},
 		},
@@ -389,12 +374,12 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusOK,
-					body:        "< fake upstream server response >",
+					body:        "Query string parameter keys: query\n",
 				},
 				{
 					matchingApp: "bad_tenant_intolerant",
 					status:      http.StatusForbidden,
-					body:        `{"status":"error","errorType":"bad_data","error": "unauthorized tenant label value"}`,
+					body:        `{"status":"error","errorType":"bad_data","error": "unauthorized tenant label value"}` + "\n",
 				},
 			},
 		},
@@ -406,7 +391,7 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusForbidden,
-					body:        "no tenant labels are configured for the user",
+					body:        "no tenant labels are configured for the user\n",
 				},
 			},
 		},
@@ -419,12 +404,12 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusForbidden,
-					body:        "no tenant labels are configured for the user",
+					body:        "no tenant labels are configured for the user\n",
 				},
 				{
 					matchingApp: "group_or_header",
 					status:      http.StatusOK,
-					body:        "< fake upstream server response >",
+					body:        "Query string parameter keys: query\n",
 				},
 			},
 		},
@@ -436,7 +421,7 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusOK,
-					body:        "< fake upstream server response >",
+					body:        "Query string parameter keys: direction,end,limit,query,start,step\n",
 				},
 			},
 		},
@@ -448,7 +433,7 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusOK,
-					body:        "< fake upstream server response >",
+					body:        "Query string parameter keys: end,query,start\n",
 				},
 			},
 		},
@@ -460,12 +445,12 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusOK,
-					body:        "< fake upstream server response >",
+					body:        "Query string parameter keys: direction,end,limit,query\n",
 				},
 				{
 					matchingApp: "bad_tenant_intolerant",
 					status:      http.StatusForbidden,
-					body:        "unauthorized tenant label value",
+					body:        "unauthorized tenant label value\n",
 				},
 			},
 		},
@@ -477,12 +462,12 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusOK,
-					body:        "< fake upstream server response >",
+					body:        "Query string parameter keys: direction,end,limit,query\n",
 				},
 				{
 					matchingApp: "bad_tenant_intolerant",
 					status:      http.StatusForbidden,
-					body:        "unauthorized tenant label value",
+					body:        "unauthorized tenant label value\n",
 				},
 			},
 		},
@@ -494,17 +479,17 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusOK,
-					body:        "< fake upstream server response >",
+					body:        "Query string parameter keys: direction,end,limit,query\n",
 				},
 				{
 					matchingApp: "bad_tenant_intolerant",
 					status:      http.StatusForbidden,
-					body:        "unauthorized tenant label value",
+					body:        "unauthorized tenant label value\n",
 				},
 				{
 					matchingApp: "bad_tenant_tolerant_nested",
 					status:      http.StatusForbidden,
-					body:        "no tenant labels are configured for the user",
+					body:        "no tenant labels are configured for the user\n",
 				},
 			},
 		},
@@ -554,7 +539,7 @@ func Test_reverseProxy(t *testing.T) {
 
 				// Check the status code and body
 				happy := assert.Equal(t, expectedResults.status, rr.Code)
-				happy = happy && assert.Contains(t, rr.Body.String(), expectedResults.body)
+				happy = happy && assert.Equal(t, expectedResults.body, rr.Body.String())
 
 				log.Info().Bool("passed", happy).Str("name", tc.name).Str("appname", appname).Msg("Reverse proxy test")
 			})
