@@ -61,6 +61,37 @@ func makeTestApp(jwksServer, upstreamServer *httptest.Server, cmh *ConfigMapHand
 	return app
 }
 
+func makeDummyServer() func(http.ResponseWriter, *http.Request) {
+	re1, err := regexp.Compile(`^(/[\w.-]+)+\w+$`)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to compile regex: %s\n", err))
+	}
+
+	re2, err := regexp.Compile(`^(/[\w.-]+)+\w([?&]\w+=[\w%~+-]+)+$`)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to compile regex: %s\n", err))
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !(re1.MatchString(r.RequestURI) || re2.MatchString(r.RequestURI)) {
+			log.Info().Any("RequestURI", r.RequestURI).Msg("Fake metrics/logs server sending HTTP 400 response.")
+			w.WriteHeader(http.StatusBadRequest)
+			_, err := fmt.Fprint(w, "Bad Parameters")
+			if err != nil {
+				log.Error().Msg("Some kind of error in the fake metrics/logs server while writing an error.")
+			}
+			return
+		}
+
+		log.Info().Any("RequestURI", r.RequestURI).Msg("Fake metrics/logs server sending HTTP 200 response.")
+		w.WriteHeader(http.StatusOK)
+		_, err = fmt.Fprintln(w, "< fake upstream server response >")
+		if err != nil {
+			log.Error().Msg("Some kind of error in the fake metrics/logs server.")
+		}
+	}
+}
+
 func setupReverseProxyTest() (map[string]App, map[string]string) {
 	// Generate a new private key.
 	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -183,39 +214,8 @@ func setupReverseProxyTest() (map[string]App, map[string]string) {
 		),
 	)
 
-	re1, err := regexp.Compile(`^(/[\w.-]+)+\w+$`)
-	if err != nil {
-		panic(fmt.Sprintf("Failed to compile regex: %s\n", err))
-	}
-
-	re2, err := regexp.Compile(`^(/[\w.-]+)+\w([?&]\w+=[\w%~+-]+)+$`)
-	if err != nil {
-		panic(fmt.Sprintf("Failed to compile regex: %s\n", err))
-	}
-
 	// Set up the upstream server
-	upstreamServer := httptest.NewServer(
-		http.HandlerFunc(
-			func(w http.ResponseWriter, r *http.Request) {
-				if !(re1.MatchString(r.RequestURI) || re2.MatchString(r.RequestURI)) {
-					log.Info().Any("RequestURI", r.RequestURI).Msg("Fake metrics/logs server sending HTTP 400 response.")
-					w.WriteHeader(http.StatusBadRequest)
-					_, err := fmt.Fprint(w, "Bad Parameters")
-					if err != nil {
-						log.Error().Msg("Some kind of error in the fake metrics/logs server while writing an error.")
-					}
-					return
-				}
-
-				log.Info().Any("RequestURI", r.RequestURI).Msg("Fake metrics/logs server sending HTTP 200 response.")
-				w.WriteHeader(http.StatusOK)
-				_, err := fmt.Fprintln(w, "< fake upstream server response >")
-				if err != nil {
-					log.Error().Msg("Some kind of error in the fake metrics/logs server.")
-				}
-			},
-		),
-	)
+	upstreamServer := httptest.NewServer(http.HandlerFunc(makeDummyServer()))
 	log.Debug().Str("Test server upstreamServer.URL", upstreamServer.URL).Msg("")
 
 	// this is our config defining what tenant label values are valid for the test cases
