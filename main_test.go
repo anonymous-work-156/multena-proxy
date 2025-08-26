@@ -445,7 +445,7 @@ func Test_reverseProxy(t *testing.T) {
 				{
 					matchingApp: "*",
 					status:      http.StatusOK,
-					body:        "Query string parameter keys: direction,end,limit,query\n",
+					body:        "Query string parameter keys: direction,end,limit,query,start,step\n",
 				},
 				{
 					matchingApp: "bad_tenant_intolerant",

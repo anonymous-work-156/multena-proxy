@@ -70,14 +70,14 @@ func makeDummyServer() func(http.ResponseWriter, *http.Request) {
 		panic(fmt.Sprintf("Failed to compile regex: %s\n", err))
 	}
 
-	re2, err := regexp.Compile(`^(/[\w.-]+)+\w([?&]\w+=[\w%~+-]+)+$`)
+	re2, err := regexp.Compile(`^(/[\w.-]+)+\w([?&]\w+=[\w.%~+-]+)+$`)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to compile regex: %s\n", err))
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !(re1.MatchString(r.RequestURI) || re2.MatchString(r.RequestURI)) {
-			log.Info().Any("RequestURI", r.RequestURI).Msg("Fake metrics/logs server sending HTTP 400 response.")
+			log.Info().Any("Fake metrics/logs server RequestURI", r.RequestURI).Msg("Fake metrics/logs server sending HTTP 400 response.")
 			w.WriteHeader(http.StatusBadRequest)
 			_, err := fmt.Fprint(w, "Bad Parameters")
 			if err != nil {
@@ -88,7 +88,7 @@ func makeDummyServer() func(http.ResponseWriter, *http.Request) {
 
 		values, err := url.ParseQuery(r.URL.RawQuery)
 		if err != nil {
-			log.Error().Err(err).Msg("Failed to parse the URL.")
+			log.Error().Err(err).Msg("Fake metrics/logs server failed to parse the URL.")
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}

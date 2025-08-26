@@ -145,7 +145,7 @@ func handler(matchWord string, enforcer EnforceQL, dsURL string, tls bool, heade
 		skip := checkNonenforcementHeader(r, a.Cfg)
 
 		if skip {
-			r.URL.RawQuery = r.URL.Query().Encode()
+			r.URL.RawQuery = r.URL.Query().Encode() // currently a mystery as to why we need to escape the URL manually
 		} else {
 			oauthToken, err := getToken(r, a)
 			if err != nil {
@@ -161,7 +161,7 @@ func handler(matchWord string, enforcer EnforceQL, dsURL string, tls bool, heade
 
 			if skip || matchWord == "" {
 				log.Debug().Msg("No label enforcement.")
-				r.URL.RawQuery = r.URL.Query().Encode()
+				r.URL.RawQuery = r.URL.Query().Encode() // currently a mystery as to why we need to escape the URL manually
 			} else {
 				err = enforceRequest(r, enforcer, labels, matchWord, a.Cfg)
 				if err != nil {
