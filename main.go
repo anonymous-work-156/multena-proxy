@@ -18,14 +18,15 @@ import (
 )
 
 type App struct {
-	Jwks                keyfunc.Keyfunc
-	Cfg                 *Config
-	TlS                 *tls.Config
-	ServiceAccountToken string
-	LabelStore          Labelstore
-	i                   *mux.Router
-	e                   *mux.Router
-	healthy             bool
+	Jwks                              keyfunc.Keyfunc
+	Cfg                               *Config
+	TlS                               *tls.Config
+	ServiceAccountToken               string
+	HeaderToDefineGroupsEncryptionKey string
+	LabelStore                        Labelstore
+	i                                 *mux.Router
+	e                                 *mux.Router
+	healthy                           bool
 }
 
 var Commit string
@@ -44,6 +45,7 @@ func main() {
 		WithSAT().
 		WithTLSConfig().
 		WithJWKS().
+		WithTokenForGroups().
 		WithLabelStore().
 		WithHealthz().
 		WithRoutes().

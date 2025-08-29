@@ -17,7 +17,6 @@ type OAuthToken struct {
 	Groups            []string `json:"-"`
 	PreferredUsername string   `json:"preferred_username"`
 	Email             string   `json:"email"`
-	jwt.RegisteredClaims
 }
 
 // getToken retrieves the OAuth token from the incoming HTTP request.

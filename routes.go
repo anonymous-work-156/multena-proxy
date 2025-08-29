@@ -1,11 +1,15 @@
 package main
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
+	"encoding/base64"
 	"fmt"
 	"net/http"
 	"net/http/httputil"
 	"net/http/pprof"
 	"net/url"
+	"strings"
 
 	"github.com/rs/zerolog/log"
 
@@ -122,74 +126,147 @@ func (a *App) WithThanos() *App {
 // handler function orchestrates the request flow through the proxy, comprising
 // authentication, conditional enforcement, and forwarding to the upstream server.
 //
-// Initially, it retrieves the OAuth token and validates it.
+// There are a variety of ways that tenant label value enforcement can be skipped.
+// If enforcement is not skipped, user and group membership will be fetched from either a header or OAuth token.
 //
-// Subsequently, it validates labels retrieved from the token and determines whether
-// enforcement should be skipped based on them. If an error occurs during label
-// validation, it is logged and a forbidden status response is dispatched. If enforcement
-// is opted to be skipped, the request is streamed directly to the upstream server without
-// further checks.
+// Subsequently, user and group information will be checked against the values in the label store.
+// If enforcement is still not skipped, label values which are appropriate for the user and group will be enforced.
+// Should any enforcement error arise, it is logged and a forbidden status is sent to the client.
 //
-// If the flow doesn’t skip enforcement, the function enforces the request based on the
-// provided labels and other relevant parameters. Should any enforcement error arise, it is
-// logged and a forbidden status is sent to the client.
-//
-// Finally, if all checks and possible enforcement pass successfully, the request is
-// streamed to the upstream server.
+// Finally, if all checks and possible enforcement pass successfully, the request is streamed to the upstream server.
 func handler(matchWord string, enforcer EnforceQL, dsURL string, tls bool, headers map[string]string, a *App) func(http.ResponseWriter, *http.Request) {
 	upstreamURL, err := url.Parse(dsURL)
 	if err != nil {
 		log.Fatal().Err(err).Str("url", dsURL).Msg("Error parsing URL")
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
-		skip := checkNonenforcementHeader(r, a.Cfg)
-
-		if skip {
-			r.URL.RawQuery = r.URL.Query().Encode() // currently a mystery as to why we need to escape the URL manually
-		} else {
-			oauthToken, err := getToken(r, a)
-			if err != nil {
-				logAndWriteError(w, http.StatusForbidden, err, "")
-				return
-			}
-
-			labels, skip, err := validateLabels(oauthToken, a)
-			if err != nil {
-				logAndWriteError(w, http.StatusForbidden, err, "")
-				return
-			}
-
-			if skip || matchWord == "" {
-				log.Debug().Msg("No label enforcement.")
-				r.URL.RawQuery = r.URL.Query().Encode() // currently a mystery as to why we need to escape the URL manually
-			} else {
-				err = enforceRequest(r, enforcer, labels, matchWord, a.Cfg)
-				if err != nil {
-					logAndWriteError(w, http.StatusForbidden, err, "")
-					return
-				}
-			}
+		doTheProxy := innerHandler(matchWord, enforcer, w, r, a)
+		if doTheProxy {
+			log.Trace().Any("r", r.URL).Any("r.ContentLength", r.ContentLength).Any("r.URL.RawQuery", r.URL.RawQuery).Msg("")
+			streamUp(w, r, upstreamURL, tls, headers, a)
 		}
-
-		//log.Debug().Any("r", r.URL).Any("r.ContentLength", r.ContentLength).Any("r.URL.RawQuery", r.URL.RawQuery).Msg("")
-		streamUp(w, r, upstreamURL, tls, headers, a)
 	}
 }
 
-// checkAdminHeader checks to see if the request contains a header and value which indicate we should skip enforcement.
-// The target header key must not be blank, it must be present in the request, and the value must not be blank.
-func checkNonenforcementHeader(r *http.Request, cfg *Config) bool {
-	if !cfg.Admin.HeaderBypass || cfg.Admin.Header.Key == "" {
-		log.Debug().Msg("Header-based bypass is not enabled.")
-		return false
-	}
-	obsHeaderVal := r.Header.Get(cfg.Admin.Header.Key)
-	if obsHeaderVal != "" && obsHeaderVal == cfg.Admin.Header.Value {
-		log.Debug().Msg("Header indicates that we can skip enforcement.")
+func innerHandler(matchWord string, enforcer EnforceQL, w http.ResponseWriter, r *http.Request, a *App) bool {
+	skip := checkBypassHeader(r, a)
+	if skip {
+		log.Debug().Msg("No label enforcement (due to bypass header).")
+		r.URL.RawQuery = r.URL.Query().Encode() // currently a mystery as to why URL escaping isn't magical
 		return true
 	}
-	log.Debug().Msg("Header (or lack thereof) indicates that we can not skip enforcement.")
+
+	var labels []string
+
+	groups := checkGroupHeader(r, a)
+	if len(groups) > 0 {
+		labels, skip = a.LabelStore.GetLabels(OAuthToken{Groups: groups}, a)
+	} else {
+		oauthToken, err := getToken(r, a)
+		if err != nil {
+			logAndWriteError(w, http.StatusForbidden, err, "")
+			return false
+		}
+
+		labels, skip, err = validateLabels(oauthToken, a)
+		if err != nil {
+			logAndWriteError(w, http.StatusForbidden, err, "")
+			return false
+		}
+	}
+
+	if skip || matchWord == "" {
+		log.Debug().Msg("No label enforcement.")
+		r.URL.RawQuery = r.URL.Query().Encode() // currently a mystery as to why URL escaping isn't magical
+	} else {
+		err := enforceRequest(r, enforcer, labels, matchWord, a.Cfg)
+		if err != nil {
+			logAndWriteError(w, http.StatusForbidden, err, "")
+			return false
+		}
+	}
+
+	return true
+}
+
+// checkBypassAndGroupHeaders checks to see if the request contains a header that changes how we do enforcement.
+// There is an optional header which skips all enforcement, and an optional header which defines group membership.
+func checkBypassHeader(r *http.Request, app *App) bool {
+
+	// check for bypassing enforcement via header
+	if app.Cfg.Admin.HeaderBypass.Enabled && app.Cfg.Admin.HeaderBypass.Key != "" && app.Cfg.Admin.HeaderBypass.Value != "" {
+		if r.Header.Get(app.Cfg.Admin.HeaderBypass.Key) == app.Cfg.Admin.HeaderBypass.Value {
+			log.Debug().Msg("Header indicates that we can skip enforcement.")
+			return true
+		}
+		log.Debug().Msg("Header-based bypass is enabled, but skipped.")
+	} else {
+		log.Debug().Msg("Header-based bypass is not enabled.")
+	}
+
 	return false
+}
+
+// checkBypassAndGroupHeaders checks to see if the request contains a header that changes how we do enforcement.
+// There is an optional header which skips all enforcement, and an optional header which defines group membership.
+func checkGroupHeader(r *http.Request, app *App) []string {
+
+	// check for group membership via header (can also bypass enforcement)
+	if app.Cfg.Web.HeaderToDefineGroups.Enabled && app.Cfg.Web.HeaderToDefineGroups.Name != "" && app.HeaderToDefineGroupsEncryptionKey != "" {
+		val := r.Header.Get(app.Cfg.Web.HeaderToDefineGroups.Name)
+		if val != "" {
+			groups, err := decryptGroupHeader(val, app.HeaderToDefineGroupsEncryptionKey)
+			if err != nil {
+				log.Debug().Msg("Failed to interpret groups header.")
+				return nil
+			}
+			return groups
+		}
+	} else {
+		log.Debug().Msg("Header-based group membership is not enabled.")
+	}
+
+	log.Debug().Msg("Header (or lack thereof) indicates that we can not skip enforcement.")
+	return nil
+}
+
+// decryptGroupHeader decrypts base64-encoded header payload with a base64-encoded 32-byte key
+func decryptGroupHeader(base64HeaderPayload string, base64Key string) ([]string, error) {
+	key, err := base64.StdEncoding.DecodeString(base64Key)
+	if err != nil {
+		return nil, err
+	}
+	ciphertext, err := base64.StdEncoding.DecodeString(base64HeaderPayload)
+	if err != nil {
+		return nil, err
+	}
+
+	// create cipher block
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+
+	// create GCM
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
+
+	// extract nonce
+	nonceSize := gcm.NonceSize()
+	if len(ciphertext) < nonceSize {
+		return nil, fmt.Errorf("ciphertext too short")
+	}
+	nonce, ciphertext := ciphertext[:nonceSize], ciphertext[nonceSize:]
+
+	// decrypt payload
+	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return strings.Split(string(plaintext), ","), nil
 }
 
 // streamUp forwards the provided HTTP request to the specified upstream URL using a reverse proxy.
