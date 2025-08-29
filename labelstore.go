@@ -28,13 +28,13 @@ type Labelstore interface {
 // instance and returns it. If the LabelStore type is unknown or an error
 // occurs during the connection, it logs a fatal error.
 func (a *App) WithLabelStore() *App {
-	switch a.Cfg.Admin.LabelStoreKind {
+	switch a.Cfg.Web.LabelStoreKind {
 	case "configmap":
 		a.LabelStore = &ConfigMapHandler{}
 	case "mysql":
 		a.LabelStore = &MySQLHandler{}
 	default:
-		log.Fatal().Str("type", a.Cfg.Admin.LabelStoreKind).Msg("Unknown label store type")
+		log.Fatal().Str("type", a.Cfg.Web.LabelStoreKind).Msg("Unknown label store type")
 	}
 	err := a.LabelStore.Connect(*a)
 	if err != nil {
@@ -60,11 +60,11 @@ type ConfigMapHandler struct {
 }
 
 func (c *ConfigMapHandler) Connect(a App) error {
-	yamlFile, err := tryReadFile("/etc/config/labels/" + a.Cfg.Admin.LabelStoreFile + ".yaml") // expected to be here deployed in a pod (mounted ConfigMap)
+	yamlFile, err := tryReadFile("/etc/config/labels/" + a.Cfg.Web.LabelStoreFile + ".yaml") // expected to be here deployed in a pod (mounted ConfigMap)
 	if err == nil {
 		log.Info().Msg("Read label config file at first potential path.")
 	} else {
-		yamlFile, err = tryReadFile("./configs/" + a.Cfg.Admin.LabelStoreFile + ".yaml") // expected to be here for test cases
+		yamlFile, err = tryReadFile("./configs/" + a.Cfg.Web.LabelStoreFile + ".yaml") // expected to be here for test cases
 		if err == nil {
 			log.Info().Msg("Read label config file at second potential path.")
 		} else {

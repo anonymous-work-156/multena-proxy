@@ -22,34 +22,43 @@ type Config struct {
 	} `yaml:"log"`
 
 	Web struct {
-		ProxyPort           int    `yaml:"proxy_port"`   // where clients come to talk to us
-		MetricsPort         int    `yaml:"metrics_port"` // for Prometheus-like engine to scrape us
-		Host                string `yaml:"host"`
-		TLSVerifySkip       bool   `yaml:"tls_verify_skip"`
-		TrustedRootCaPath   string `yaml:"trusted_root_ca_path"`
+		ProxyPort   int    `yaml:"proxy_port"`   // where clients come to talk to us
+		MetricsPort int    `yaml:"metrics_port"` // for Prometheus-like engine to scrape us
+		Host        string `yaml:"host"`
+
+		TLSVerifySkip     bool   `yaml:"tls_verify_skip"`
+		TrustedRootCaPath string `yaml:"trusted_root_ca_path"`
+
 		JwksCertURL         string `yaml:"jwks_cert_url"`
-		OAuthGroupName      string `yaml:"oauth_group_name"` // the token claim field name in which to find group membership
-		ServiceAccountToken string `yaml:"service_account_token"`
 		HeaderContainingJWT string `yaml:"header_containing_jwt"`
+		OAuthGroupName      string `yaml:"oauth_group_name"` // the token claim field name in which to find group membership
+
+		HeaderToDefineGroups struct {
+			Enabled           bool   `yaml:"enabled"`             // enable or disable headers for defining groups
+			Name              string `yaml:"name"`                // header name
+			EncryptionKeyPath string `yaml:"encryption_key_path"` // path to file containing encryption key for header contents
+		} `yaml:"header_to_define_groups"`
+
+		LabelStoreKind string `yaml:"label_store_kind"` // choose: configmap, mysql
+		LabelStoreFile string `yaml:"label_store_file"` // base name of label config file (ignored with label_store_kind: mysql)
 	} `yaml:"web"`
 
 	Admin struct {
-		LabelStoreKind   string `yaml:"label_store_kind"`   // choose: configmap, mysql
-		LabelStoreFile   string `yaml:"label_store_file"`   // base name of label config file (ignored with label_store_kind: mysql)
 		GroupBypass      bool   `yaml:"group_bypass"`       // enable or disable admin group bypass
 		Group            string `yaml:"group"`              // the name of the admin group
 		MagicValueBypass bool   `yaml:"magic_value_bypass"` // enable or disable magic value bypass (ignored with nested configmap structure)
 		MagicValue       string `yaml:"magic_value"`        // the magic value which bypasses checks (ignored with nested configmap structure)
-		HeaderBypass     bool   `yaml:"header_bypass"`      // enable or disable magic header bypass
-		Header           struct {
-			Key   string `yaml:"key"`   // header name for bypass
-			Value string `yaml:"value"` // header value for bypass
+		HeaderBypass     struct {
+			Enabled bool   `yaml:"enabled"` // enable or disable magic header bypass
+			Key     string `yaml:"key"`     // header name for bypass
+			Value   string `yaml:"value"`   // header value for bypass
 		} `yaml:"header"`
 	} `yaml:"admin"`
 
 	Dev struct {
-		Enabled  bool   `yaml:"enabled"`
-		Username string `yaml:"username"`
+		Enabled             bool   `yaml:"enabled"`
+		Username            string `yaml:"username"`
+		ServiceAccountToken string `yaml:"service_account_token"`
 	} `yaml:"dev"`
 
 	Db struct {
@@ -114,7 +123,7 @@ func (a *App) WithConfig() *App {
 
 func (a *App) WithSAT() *App {
 	if a.Cfg.Dev.Enabled {
-		a.ServiceAccountToken = a.Cfg.Web.ServiceAccountToken
+		a.ServiceAccountToken = a.Cfg.Dev.ServiceAccountToken
 		return a
 	}
 	sa, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/token")
@@ -200,5 +209,16 @@ func (a *App) WithJWKS() *App {
 	}
 	log.Info().Str("url", a.Cfg.Web.JwksCertURL).Msg("JWKS URL")
 	a.Jwks = jwks
+	return a
+}
+
+func (a *App) WithTokenForGroups() *App {
+	if a.Cfg.Web.HeaderToDefineGroups.Enabled {
+		key, err := os.ReadFile(a.Cfg.Web.HeaderToDefineGroups.EncryptionKeyPath)
+		if err != nil {
+			log.Fatal().Err(err).Msg("Error while reading encryption key for header to define groups")
+		}
+		a.HeaderToDefineGroupsEncryptionKey = string(key)
+	}
 	return a
 }

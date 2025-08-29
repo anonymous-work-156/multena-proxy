@@ -185,8 +185,8 @@ func TestGetLabelsLinearCM(t *testing.T) {
 
 	app := &App{}
 	app.WithConfig()
-	app.Cfg.Admin.LabelStoreKind = "configmap"     // this also the default value
-	app.Cfg.Admin.LabelStoreFile = "linear-labels" // file we load from disk (minus extension)
+	app.Cfg.Web.LabelStoreKind = "configmap"     // this also the default value
+	app.Cfg.Web.LabelStoreFile = "linear-labels" // file we load from disk (minus extension)
 	app.Cfg.Admin.GroupBypass = false
 	app.Cfg.Admin.MagicValueBypass = true
 	app.Cfg.Admin.MagicValue = "#cluster-wide" // needs to match value in the file we load from disk
@@ -253,8 +253,8 @@ func TestGetLabelsNestedCM(t *testing.T) {
 
 	app := &App{}
 	app.WithConfig()
-	app.Cfg.Admin.LabelStoreKind = "configmap"     // this also the default value
-	app.Cfg.Admin.LabelStoreFile = "nested-labels" // file we load from disk (minus extension)
+	app.Cfg.Web.LabelStoreKind = "configmap"     // this also the default value
+	app.Cfg.Web.LabelStoreFile = "nested-labels" // file we load from disk (minus extension)
 	app.Cfg.Admin.GroupBypass = false
 
 	configMapLinear := ConfigMapHandler{}

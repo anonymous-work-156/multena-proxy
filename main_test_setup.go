@@ -52,10 +52,10 @@ func makeTestApp(jwksServer, upstreamServer *httptest.Server, cmh *ConfigMapHand
 		app.Cfg.Admin.MagicValue = "#cluster-wide" // #cluster-wide is associated with a user in ConfigMapHandler
 	}
 
-	app.Cfg.Admin.HeaderBypass = headerBypass
+	app.Cfg.Admin.HeaderBypass.Enabled = headerBypass
 	if headerBypass {
-		app.Cfg.Admin.Header.Key = "MagicHeader"
-		app.Cfg.Admin.Header.Value = "notaverygoodsecret"
+		app.Cfg.Admin.HeaderBypass.Key = "MagicHeader"
+		app.Cfg.Admin.HeaderBypass.Value = "notaverygoodsecret"
 	}
 
 	app.LabelStore = cmh
