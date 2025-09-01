@@ -19,19 +19,12 @@ func Test_reverseProxy(t *testing.T) {
 		body        string
 	}
 
-	type TestHeader struct {
-		key string
-		val string
-	}
-
 	type TestCase struct {
-		name                string
-		baseName            string
-		URL                 string
-		noSetAuthorization  bool
-		authorizationHeader string
-		header              TestHeader
-		expectedResults     []ExpectedResult
+		name            string
+		baseName        string
+		URL             string
+		headers         map[string]string
+		expectedResults []ExpectedResult
 	}
 
 	cases := []TestCase{
@@ -45,9 +38,9 @@ func Test_reverseProxy(t *testing.T) {
 			}},
 		},
 		{
-			baseName:            "crap_request",
-			URL:                 "/api/v1/query?bar=&=bad",        // should trigger the regex check in the test server
-			authorizationHeader: "Bearer " + tokens["userTenant"], // valid creds
+			baseName: "crap_request",
+			URL:      "/api/v1/query?bar=&=bad",                                            // should trigger the regex check in the test server
+			headers:  map[string]string{"Authorization": "Bearer " + tokens["userTenant"]}, // valid creds
 			expectedResults: []ExpectedResult{{
 				matchingApp: "*",
 				status:      http.StatusBadRequest, // test that our test server rejects this and that we can observe the rejection
@@ -55,9 +48,8 @@ func Test_reverseProxy(t *testing.T) {
 			}},
 		},
 		{
-			baseName:           "no_headers_at_all",
-			URL:                "/api/v1/query_range",
-			noSetAuthorization: true,
+			baseName: "no_headers_at_all",
+			URL:      "/api/v1/query_range",
 			expectedResults: []ExpectedResult{
 				{
 					matchingApp: "*",
@@ -67,10 +59,9 @@ func Test_reverseProxy(t *testing.T) {
 			},
 		},
 		{
-			baseName:           "missing_auth_header",
-			URL:                "/api/v1/query_range",
-			noSetAuthorization: true,
-			header:             TestHeader{key: "MagicHeader", val: "notaverygoodsecret"}, // one app should pass due to this
+			baseName: "missing_auth_header",
+			URL:      "/api/v1/query_range",
+			headers:  map[string]string{"MagicHeader": "notaverygoodsecret"}, // one app should pass due to this
 			expectedResults: []ExpectedResult{
 				{
 					matchingApp: "*",
@@ -85,10 +76,12 @@ func Test_reverseProxy(t *testing.T) {
 			},
 		},
 		{
-			baseName:            "malformed_auth_header_1",
-			URL:                 "/api/v1/query_range",
-			authorizationHeader: "B",
-			header:              TestHeader{key: "MagicHeader", val: "notaverygoodsecret"}, // one app should pass due to this
+			baseName: "malformed_auth_header_1",
+			URL:      "/api/v1/query_range",
+			headers: map[string]string{
+				"Authorization": "B",                  // certainly not useful
+				"MagicHeader":   "notaverygoodsecret", // one app should pass due to this
+			},
 			expectedResults: []ExpectedResult{
 				{
 					matchingApp: "*",
@@ -103,10 +96,12 @@ func Test_reverseProxy(t *testing.T) {
 			},
 		},
 		{
-			baseName:            "malformed_auth_header_2",
-			URL:                 "/api/v1/query_range",
-			authorizationHeader: "Bearer ",
-			header:              TestHeader{key: "MagicHeader", val: "notaverygoodsecret"}, // one app should pass due to this
+			baseName: "malformed_auth_header_2",
+			URL:      "/api/v1/query_range",
+			headers: map[string]string{
+				"Authorization": "Bearer ",            // certainly not useful
+				"MagicHeader":   "notaverygoodsecret", // one app should pass due to this
+			},
 			expectedResults: []ExpectedResult{
 				{
 					matchingApp: "*",
@@ -121,10 +116,12 @@ func Test_reverseProxy(t *testing.T) {
 			},
 		},
 		{
-			baseName:            "malformed_headers_1",
-			URL:                 "/api/v1/query_range",
-			authorizationHeader: "Bearer skk",
-			header:              TestHeader{key: "MagicHeader", val: "wrong"},
+			baseName: "malformed_headers_1",
+			URL:      "/api/v1/query_range",
+			headers: map[string]string{
+				"Authorization": "Bearer skk", // not useful
+				"MagicHeader":   "wrong",      // not going to work either
+			},
 			expectedResults: []ExpectedResult{
 				{
 					matchingApp: "*",
@@ -134,10 +131,12 @@ func Test_reverseProxy(t *testing.T) {
 			},
 		},
 		{
-			baseName:            "malformed_headers_2",
-			URL:                 "/api/v1/query_range",
-			authorizationHeader: "Bearer abc def",
-			header:              TestHeader{key: "MagicHeader", val: ""},
+			baseName: "malformed_headers_2",
+			URL:      "/api/v1/query_range",
+			headers: map[string]string{
+				"Authorization": "Bearer abc def", // not useful
+				"MagicHeader":   "",               // not going to work either
+			},
 			expectedResults: []ExpectedResult{
 				{
 					matchingApp: "*",
@@ -147,10 +146,12 @@ func Test_reverseProxy(t *testing.T) {
 			},
 		},
 		{
-			baseName:            "user_in_token_is_invalid_1",
-			URL:                 "/api/v1/query_range",
-			authorizationHeader: "Bearer " + tokens["invalidTenant"],                       // token configured with user name which is not in config store
-			header:              TestHeader{key: "MagicHeader", val: "notaverygoodsecret"}, // one app should pass due to this
+			baseName: "user_in_token_is_invalid_1",
+			URL:      "/api/v1/query_range",
+			headers: map[string]string{
+				"Authorization": "Bearer " + tokens["invalidTenant"], // token configured with user name which is not in config store
+				"MagicHeader":   "notaverygoodsecret",                // one app should pass due to this
+			},
 			expectedResults: []ExpectedResult{
 				{
 					matchingApp: "*",
@@ -165,10 +166,12 @@ func Test_reverseProxy(t *testing.T) {
 			},
 		},
 		{
-			baseName:            "user_in_token_is_invalid_2",
-			URL:                 `/api/v1/query_range?query=up{tenant_id="forbidden_tenant"}`, // there is no value for tenant_id that should work
-			authorizationHeader: "Bearer " + tokens["invalidTenant"],                          // token configured with user name which is not in config store
-			header:              TestHeader{key: "MagicHeader", val: "notaverygoodsecret"},    // one app should pass due to this
+			baseName: "user_in_token_is_invalid_2",
+			URL:      `/api/v1/query_range?query=up{tenant_id="forbidden_tenant"}`, // there is no value for tenant_id that should work
+			headers: map[string]string{
+				"Authorization": "Bearer " + tokens["invalidTenant"], // token configured with user name which is not in config store
+				"MagicHeader":   "notaverygoodsecret",                // one app should pass due to this
+			},
 			expectedResults: []ExpectedResult{
 				{
 					matchingApp: "*",
@@ -183,9 +186,9 @@ func Test_reverseProxy(t *testing.T) {
 			},
 		},
 		{
-			baseName:            "empty_query",
-			URL:                 `/api/v1/query_range`,
-			authorizationHeader: "Bearer " + tokens["userTenant"],
+			baseName: "empty_query",
+			URL:      `/api/v1/query_range`,
+			headers:  map[string]string{"Authorization": "Bearer " + tokens["userTenant"]},
 			expectedResults: []ExpectedResult{
 				{
 					matchingApp: "*",
@@ -195,26 +198,9 @@ func Test_reverseProxy(t *testing.T) {
 			},
 		},
 		{
-			baseName:            "multiple_group_membership_with_invalid_tenant",
-			URL:                 `/api/v1/query_range?query=up{tenant_id="forbidden_tenant"}`,
-			authorizationHeader: "Bearer " + tokens["groupTenant"],
-			expectedResults: []ExpectedResult{
-				{
-					matchingApp: "*",
-					status:      http.StatusOK,
-					body:        "Query string parameter keys: query\n",
-				},
-				{
-					matchingApp: "bad_tenant_intolerant",
-					status:      http.StatusForbidden,
-					body:        `{"status":"error","errorType":"bad_data","error": "unauthorized tenant label value"}` + "\n",
-				},
-			},
-		},
-		{
-			baseName:            "user_without_groups_with_invalid_tenant",
-			URL:                 `/api/v1/query?query=up{tenant_id="another_forbidden_tenant"}`,
-			authorizationHeader: "Bearer " + tokens["userTenant"],
+			baseName: "multiple_group_membership_with_invalid_tenant",
+			URL:      `/api/v1/query_range?query=up{tenant_id="forbidden_tenant"}`,
+			headers:  map[string]string{"Authorization": "Bearer " + tokens["groupTenant"]},
 			expectedResults: []ExpectedResult{
 				{
 					matchingApp: "*",
@@ -229,9 +215,26 @@ func Test_reverseProxy(t *testing.T) {
 			},
 		},
 		{
-			baseName:            "user_query_that_results_in_no_matched_tenant_label_values_and_empty_result",
-			URL:                 `/api/v1/query?query=up{tenant_id=~"frogs!"}`,
-			authorizationHeader: "Bearer " + tokens["userTenant"],
+			baseName: "user_without_groups_with_invalid_tenant",
+			URL:      `/api/v1/query?query=up{tenant_id="another_forbidden_tenant"}`,
+			headers:  map[string]string{"Authorization": "Bearer " + tokens["userTenant"]},
+			expectedResults: []ExpectedResult{
+				{
+					matchingApp: "*",
+					status:      http.StatusOK,
+					body:        "Query string parameter keys: query\n",
+				},
+				{
+					matchingApp: "bad_tenant_intolerant",
+					status:      http.StatusForbidden,
+					body:        `{"status":"error","errorType":"bad_data","error": "unauthorized tenant label value"}` + "\n",
+				},
+			},
+		},
+		{
+			baseName: "user_query_that_results_in_no_matched_tenant_label_values_and_empty_result",
+			URL:      `/api/v1/query?query=up{tenant_id=~"frogs!"}`,
+			headers:  map[string]string{"Authorization": "Bearer " + tokens["userTenant"]},
 			expectedResults: []ExpectedResult{
 				{
 					matchingApp: "*",
@@ -246,9 +249,9 @@ func Test_reverseProxy(t *testing.T) {
 			},
 		},
 		{
-			baseName:            "group_membership_with_single_valid_tenant_value",
-			URL:                 `/api/v1/query?query=up{tenant_id="tenant_id_g1"}`,
-			authorizationHeader: "Bearer " + tokens["groupTenant"],
+			baseName: "group_membership_with_single_valid_tenant_value",
+			URL:      `/api/v1/query?query=up{tenant_id="tenant_id_g1"}`,
+			headers:  map[string]string{"Authorization": "Bearer " + tokens["groupTenant"]},
 			expectedResults: []ExpectedResult{
 				{
 					matchingApp: "*",
@@ -258,9 +261,9 @@ func Test_reverseProxy(t *testing.T) {
 			},
 		},
 		{
-			baseName:            "multiple_group_membership_with_single_valid_tenant_value",
-			URL:                 `/api/v1/query?query={tenant_id="tenant_id_g2"} != 1337`,
-			authorizationHeader: "Bearer " + tokens["twoGroupsTenant"],
+			baseName: "multiple_group_membership_with_single_valid_tenant_value",
+			URL:      `/api/v1/query?query={tenant_id="tenant_id_g2"} != 1337`,
+			headers:  map[string]string{"Authorization": "Bearer " + tokens["twoGroupsTenant"]},
 			expectedResults: []ExpectedResult{
 				{
 					matchingApp: "*",
@@ -270,9 +273,9 @@ func Test_reverseProxy(t *testing.T) {
 			},
 		},
 		{
-			baseName:            "multiple_group_membership_with_multiple_valid_tenant_values_1",
-			URL:                 `/api/v1/query?query=up{tenant_id=~"tenant_id_g1|tenant_id_g4"}`,
-			authorizationHeader: "Bearer " + tokens["twoGroupsTenant"],
+			baseName: "multiple_group_membership_with_multiple_valid_tenant_values_1",
+			URL:      `/api/v1/query?query=up{tenant_id=~"tenant_id_g1|tenant_id_g4"}`,
+			headers:  map[string]string{"Authorization": "Bearer " + tokens["twoGroupsTenant"]},
 			expectedResults: []ExpectedResult{
 				{
 					matchingApp: "*",
@@ -282,9 +285,9 @@ func Test_reverseProxy(t *testing.T) {
 			},
 		},
 		{
-			baseName:            "multiple_group_membership_with_multiple_valid_tenant_values_2",
-			URL:                 `/api/v1/query?query={tenant_id=~"tenant_id_g1|tenant_id_g3"} != 1337`,
-			authorizationHeader: "Bearer " + tokens["twoGroupsTenant"],
+			baseName: "multiple_group_membership_with_multiple_valid_tenant_values_2",
+			URL:      `/api/v1/query?query={tenant_id=~"tenant_id_g1|tenant_id_g3"} != 1337`,
+			headers:  map[string]string{"Authorization": "Bearer " + tokens["twoGroupsTenant"]},
 			expectedResults: []ExpectedResult{
 				{
 					matchingApp: "*",
@@ -294,9 +297,9 @@ func Test_reverseProxy(t *testing.T) {
 			},
 		},
 		{
-			baseName:            "admin_bypass_from_config",
-			URL:                 `/api/v1/query?query=some_metric{tenant_id="whocaresweretheadmin"} != 1337`,
-			authorizationHeader: "Bearer " + tokens["adminBypassTenant"],
+			baseName: "admin_bypass_from_config",
+			URL:      `/api/v1/query?query=some_metric{tenant_id="whocaresweretheadmin"} != 1337`,
+			headers:  map[string]string{"Authorization": "Bearer " + tokens["adminBypassTenant"]},
 			expectedResults: []ExpectedResult{
 				{
 					matchingApp: "*",
@@ -315,10 +318,27 @@ func Test_reverseProxy(t *testing.T) {
 				},
 			},
 		},
+		/*{
+			baseName: "admin_bypass_from_nested_labelstore_from_header",
+			URL:      `/api/v1/query?query=some_metric{tenant_id="whocaresweretheadmin"} != 1337`,
+			headers:  map[string]string{"GroupHeader": "FIXME"},
+			expectedResults: []ExpectedResult{
+				{
+					matchingApp: "*",
+					status:      http.StatusForbidden,
+					body:        "got no value for the HTTP header which is expected to contain the JWT\n",
+				},
+				{
+					matchingApp: "group_from_header",
+					status:      http.StatusOK,
+					body:        "Query string parameter keys: query\n",
+				},
+			},
+		},*/
 		{
-			baseName:            "admin_bypass_from_nested_labelstore",
-			URL:                 `/api/v1/query?query=some_metric{tenant_id="whocaresweretheadmin"} != 1337`,
-			authorizationHeader: "Bearer " + tokens["nestedBypassTenant"],
+			baseName: "admin_bypass_from_nested_labelstore",
+			URL:      `/api/v1/query?query=some_metric{tenant_id="whocaresweretheadmin"} != 1337`,
+			headers:  map[string]string{"Authorization": "Bearer " + tokens["nestedBypassTenant"]},
 			expectedResults: []ExpectedResult{
 				{
 					matchingApp: "*",
@@ -338,9 +358,9 @@ func Test_reverseProxy(t *testing.T) {
 			},
 		},
 		{
-			baseName:            "strange_query_with_magic_value_bypass_1",
-			URL:                 `/api/v1/query?query=count(count({__name__!="",tenant_id="bob"}) by (__name__))`, // any tenant value works
-			authorizationHeader: "Bearer " + tokens["magicBypassTenant"],
+			baseName: "strange_query_with_magic_value_bypass_1",
+			URL:      `/api/v1/query?query=count(count({__name__!="",tenant_id="bob"}) by (__name__))`, // any tenant value works
+			headers:  map[string]string{"Authorization": "Bearer " + tokens["magicBypassTenant"]},
 			expectedResults: []ExpectedResult{
 				{
 					matchingApp: "*",
@@ -365,9 +385,9 @@ func Test_reverseProxy(t *testing.T) {
 			},
 		},
 		{
-			baseName:            "strange_query_with_magic_value_bypass_2",
-			URL:                 `/api/v1/query?query=count(count({__name__!=""}) by (__name__))`, // missing tenant value works
-			authorizationHeader: "Bearer " + tokens["magicBypassTenant"],
+			baseName: "strange_query_with_magic_value_bypass_2",
+			URL:      `/api/v1/query?query=count(count({__name__!=""}) by (__name__))`, // missing tenant value works
+			headers:  map[string]string{"Authorization": "Bearer " + tokens["magicBypassTenant"]},
 			expectedResults: []ExpectedResult{
 				{
 					matchingApp: "*",
@@ -387,9 +407,9 @@ func Test_reverseProxy(t *testing.T) {
 			},
 		},
 		{
-			baseName:            "strange_query_with_magic_value_bypass_3",
-			URL:                 `/api/v1/query?query=count(count({__name__!="",tenant_id="bob"}) by (__name__))`, // without the magic value, tenant is checked
-			authorizationHeader: "Bearer " + tokens["twoGroupsTenant"],
+			baseName: "strange_query_with_magic_value_bypass_3",
+			URL:      `/api/v1/query?query=count(count({__name__!="",tenant_id="bob"}) by (__name__))`, // without the magic value, tenant is checked
+			headers:  map[string]string{"Authorization": "Bearer " + tokens["twoGroupsTenant"]},
 			expectedResults: []ExpectedResult{
 				{
 					matchingApp: "*",
@@ -404,9 +424,9 @@ func Test_reverseProxy(t *testing.T) {
 			},
 		},
 		{
-			baseName:            "invalid_magic_value_bypass",
-			URL:                 `/api/v1/query?query=count(count({__name__!="",tenant_id="bob"}) by (__name__))`, // without the magic value, tenant is checked
-			authorizationHeader: "Bearer " + tokens["invalidMagicBypassTenant"],
+			baseName: "invalid_magic_value_bypass",
+			URL:      `/api/v1/query?query=count(count({__name__!="",tenant_id="bob"}) by (__name__))`, // without the magic value, tenant is checked
+			headers:  map[string]string{"Authorization": "Bearer " + tokens["invalidMagicBypassTenant"]},
 			expectedResults: []ExpectedResult{
 				{
 					matchingApp: "*",
@@ -416,10 +436,12 @@ func Test_reverseProxy(t *testing.T) {
 			},
 		},
 		{
-			baseName:            "invalid_magic_value_bypass_with_magic_header",
-			URL:                 `/api/v1/query?query=count(count({__name__!="",tenant_id="bob"}) by (__name__))`, // without the magic value, tenant is checked
-			authorizationHeader: "Bearer " + tokens["invalidMagicBypassTenant"],
-			header:              TestHeader{key: "MagicHeader", val: "notaverygoodsecret"},
+			baseName: "invalid_magic_value_bypass_with_magic_header",
+			URL:      `/api/v1/query?query=count(count({__name__!="",tenant_id="bob"}) by (__name__))`, // without the magic value, tenant is checked
+			headers: map[string]string{
+				"Authorization": "Bearer " + tokens["invalidMagicBypassTenant"], // should fail
+				"MagicHeader":   "notaverygoodsecret",                           // one app should pass due to this
+			},
 			expectedResults: []ExpectedResult{
 				{
 					matchingApp: "*",
@@ -434,9 +456,9 @@ func Test_reverseProxy(t *testing.T) {
 			},
 		},
 		{
-			baseName:            "loki_queryrange_with_valid_label",
-			URL:                 "/loki/api/v1/query_range?direction=backward&end=1690463973787000000&limit=1000&query=sum by (level) (count_over_time({tenant_id=\"tenant_id_g1\"} |= `path` |= `label` | json | line_format `{{.message}}` | json | line_format `{{.request}}` | json | line_format `{{.method | printf \"%-4s\"}} {{.path | printf \"%-60s\"}} {{.url | urldecode}}`[1m]))&start=1690377573787000000&step=60000ms",
-			authorizationHeader: "Bearer " + tokens["twoGroupsTenant"],
+			baseName: "loki_queryrange_with_valid_label",
+			URL:      "/loki/api/v1/query_range?direction=backward&end=1690463973787000000&limit=1000&query=sum by (level) (count_over_time({tenant_id=\"tenant_id_g1\"} |= `path` |= `label` | json | line_format `{{.message}}` | json | line_format `{{.request}}` | json | line_format `{{.method | printf \"%-4s\"}} {{.path | printf \"%-60s\"}} {{.url | urldecode}}`[1m]))&start=1690377573787000000&step=60000ms",
+			headers:  map[string]string{"Authorization": "Bearer " + tokens["twoGroupsTenant"]},
 			expectedResults: []ExpectedResult{
 				{
 					matchingApp: "*",
@@ -446,9 +468,9 @@ func Test_reverseProxy(t *testing.T) {
 			},
 		},
 		{
-			baseName:            "loki_index_stats_with_valid_label",
-			URL:                 `/loki/api/v1/index/stats?query={tenant_id="tenant_id_u1"}&start=1690377573724000000&end=1690463973724000000`,
-			authorizationHeader: "Bearer " + tokens["userTenant"],
+			baseName: "loki_index_stats_with_valid_label",
+			URL:      `/loki/api/v1/index/stats?query={tenant_id="tenant_id_u1"}&start=1690377573724000000&end=1690463973724000000`,
+			headers:  map[string]string{"Authorization": "Bearer " + tokens["userTenant"]},
 			expectedResults: []ExpectedResult{
 				{
 					matchingApp: "*",
@@ -458,9 +480,9 @@ func Test_reverseProxy(t *testing.T) {
 			},
 		},
 		{
-			baseName:            "loki_big_query_invalid_label_1",
-			URL:                 "/loki/api/v1/query_range?direction=backward&end=1690463973693000000&limit=10&query={tenant_id=\"forbidden_tenant\"} |= `path` |= `label` | json | line_format `{{.message}}` | json | line_format `{{.request}}` | json | line_format `{{.method}} {{.path}} {{.url | urldecode}}`&start=1690377573693000000&step=86400000ms",
-			authorizationHeader: "Bearer " + tokens["userAndGroupTenant"],
+			baseName: "loki_big_query_invalid_label_1",
+			URL:      "/loki/api/v1/query_range?direction=backward&end=1690463973693000000&limit=10&query={tenant_id=\"forbidden_tenant\"} |= `path` |= `label` | json | line_format `{{.message}}` | json | line_format `{{.request}}` | json | line_format `{{.method}} {{.path}} {{.url | urldecode}}`&start=1690377573693000000&step=86400000ms",
+			headers:  map[string]string{"Authorization": "Bearer " + tokens["userAndGroupTenant"]},
 			expectedResults: []ExpectedResult{
 				{
 					matchingApp: "*",
@@ -475,9 +497,9 @@ func Test_reverseProxy(t *testing.T) {
 			},
 		},
 		{
-			baseName:            "loki_big_query_invalid_label_2",
-			URL:                 `/loki/api/v1/query_range?direction=backward&end=1690463973693000000&limit=10&query={tenant_id="forbidden_tenant"}`,
-			authorizationHeader: "Bearer " + tokens["userTenant"],
+			baseName: "loki_big_query_invalid_label_2",
+			URL:      `/loki/api/v1/query_range?direction=backward&end=1690463973693000000&limit=10&query={tenant_id="forbidden_tenant"}`,
+			headers:  map[string]string{"Authorization": "Bearer " + tokens["userTenant"]},
 			expectedResults: []ExpectedResult{
 				{
 					matchingApp: "*",
@@ -492,9 +514,9 @@ func Test_reverseProxy(t *testing.T) {
 			},
 		},
 		{
-			baseName:            "loki_big_query_invalid_label_3",
-			URL:                 `/loki/api/v1/query_range?direction=backward&end=1690463973693000000&limit=10&query={tenant_id="forbidden_tenant"}`,
-			authorizationHeader: "Bearer " + tokens["magicBypassTenant"],
+			baseName: "loki_big_query_invalid_label_3",
+			URL:      `/loki/api/v1/query_range?direction=backward&end=1690463973693000000&limit=10&query={tenant_id="forbidden_tenant"}`,
+			headers:  map[string]string{"Authorization": "Bearer " + tokens["magicBypassTenant"]},
 			expectedResults: []ExpectedResult{
 				{
 					matchingApp: "*",
@@ -526,18 +548,15 @@ func Test_reverseProxy(t *testing.T) {
 			t.Run(tc.name, func(t *testing.T) {
 
 				// Create a request
-				log.Debug().Str("URL", tc.URL).Str("Authorization", tc.authorizationHeader).Msg("Test request")
+				log.Debug().Str("URL", tc.URL).Any("headers", tc.headers).Msg("Test request")
 				req, err := http.NewRequest("GET", tc.URL, nil)
 				if err != nil {
 					t.Fatal(err)
 				}
 
 				// Set headers based on the test case.
-				if !tc.noSetAuthorization {
-					req.Header.Add("Authorization", tc.authorizationHeader)
-				}
-				if tc.header.key != "" {
-					req.Header.Add(tc.header.key, tc.header.val)
+				for k, v := range tc.headers {
+					req.Header.Add(k, v)
 				}
 
 				// Prepare the response recorder
