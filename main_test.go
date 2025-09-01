@@ -308,6 +308,11 @@ func Test_reverseProxy(t *testing.T) {
 					status:      http.StatusForbidden,
 					body:        "no tenant labels are configured for the user\n",
 				},
+				{
+					matchingApp: "group_from_header",
+					status:      http.StatusForbidden,
+					body:        "no tenant labels are configured for the user\n",
+				},
 			},
 		},
 		{
@@ -322,6 +327,11 @@ func Test_reverseProxy(t *testing.T) {
 				},
 				{
 					matchingApp: "bad_tenant_tolerant_nested",
+					status:      http.StatusOK,
+					body:        "Query string parameter keys: query\n",
+				},
+				{
+					matchingApp: "group_from_header",
 					status:      http.StatusOK,
 					body:        "Query string parameter keys: query\n",
 				},
@@ -347,6 +357,11 @@ func Test_reverseProxy(t *testing.T) {
 					status:      http.StatusForbidden,
 					body:        "no tenant labels are configured for the user\n",
 				},
+				{
+					matchingApp: "group_from_header",
+					status:      http.StatusForbidden,
+					body:        "no tenant labels are configured for the user\n",
+				},
 			},
 		},
 		{
@@ -361,6 +376,11 @@ func Test_reverseProxy(t *testing.T) {
 				},
 				{
 					matchingApp: "bad_tenant_tolerant_nested",
+					status:      http.StatusForbidden,
+					body:        "no tenant labels are configured for the user\n",
+				},
+				{
+					matchingApp: "group_from_header",
 					status:      http.StatusForbidden,
 					body:        "no tenant labels are configured for the user\n",
 				},
@@ -488,6 +508,11 @@ func Test_reverseProxy(t *testing.T) {
 				},
 				{
 					matchingApp: "bad_tenant_tolerant_nested",
+					status:      http.StatusForbidden,
+					body:        "no tenant labels are configured for the user\n",
+				},
+				{
+					matchingApp: "group_from_header",
 					status:      http.StatusForbidden,
 					body:        "no tenant labels are configured for the user\n",
 				},

@@ -29,7 +29,7 @@ func genJWKS(username, email string, groups []string, pk *ecdsa.PrivateKey) (str
 	return token.SignedString(pk)
 }
 
-func makeTestApp(jwksServer, upstreamServer *httptest.Server, cmh *ConfigMapHandler, errorOnIllegalTenantValue bool, adminGroup bool, magicValueBypass bool, headerBypass bool) App {
+func makeTestApp(jwksServer, upstreamServer *httptest.Server, cmh *ConfigMapHandler, errorOnIllegalTenantValue bool, adminGroup bool, magicValueBypass bool, headerBypass bool, groupsHeader bool) App {
 	app := App{}
 	app.WithConfig() // note: sets logging level based on config.yaml
 	app.Cfg.Web.JwksCertURL = jwksServer.URL
@@ -56,6 +56,11 @@ func makeTestApp(jwksServer, upstreamServer *httptest.Server, cmh *ConfigMapHand
 	if headerBypass {
 		app.Cfg.Admin.HeaderBypass.Key = "MagicHeader"
 		app.Cfg.Admin.HeaderBypass.Value = "notaverygoodsecret"
+	}
+
+	app.Cfg.Web.HeaderToDefineGroups.Enabled = groupsHeader
+	if groupsHeader {
+		app.Cfg.Web.HeaderToDefineGroups.Name = "GroupHeader"
 	}
 
 	app.LabelStore = cmh
@@ -272,11 +277,12 @@ func setupReverseProxyTest() (map[string]App, map[string]string) {
 	}
 
 	appmap := map[string]App{
-		"bad_tenant_tolerant":        makeTestApp(jwksServer, upstreamServer, &cmh_linear, false, true, false, false),
-		"bad_tenant_tolerant_nested": makeTestApp(jwksServer, upstreamServer, &cmh_nested, false, true, false, false),
-		"bad_tenant_intolerant":      makeTestApp(jwksServer, upstreamServer, &cmh_linear, true, true, false, false),
-		"only_magic_val":             makeTestApp(jwksServer, upstreamServer, &cmh_linear, false, false, true, false),
-		"group_or_header":            makeTestApp(jwksServer, upstreamServer, &cmh_linear, false, true, false, true),
+		"bad_tenant_tolerant":        makeTestApp(jwksServer, upstreamServer, &cmh_linear, false, true, false, false, false),
+		"bad_tenant_tolerant_nested": makeTestApp(jwksServer, upstreamServer, &cmh_nested, false, true, false, false, false),
+		"bad_tenant_intolerant":      makeTestApp(jwksServer, upstreamServer, &cmh_linear, true, true, false, false, false),
+		"only_magic_val":             makeTestApp(jwksServer, upstreamServer, &cmh_linear, false, false, true, false, false),
+		"group_or_header":            makeTestApp(jwksServer, upstreamServer, &cmh_linear, false, true, false, true, false),
+		"group_from_header":          makeTestApp(jwksServer, upstreamServer, &cmh_nested, false, false, false, false, true),
 	}
 	return appmap, tokens
 }
