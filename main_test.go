@@ -318,10 +318,10 @@ func Test_reverseProxy(t *testing.T) {
 				},
 			},
 		},
-		/*{
+		{
 			baseName: "admin_bypass_from_nested_labelstore_from_header",
 			URL:      `/api/v1/query?query=some_metric{tenant_id="whocaresweretheadmin"} != 1337`,
-			headers:  map[string]string{"GroupHeader": "FIXME"},
+			headers:  map[string]string{"GroupHeader": "admin-in-config"}, // empty encryption key should let this work
 			expectedResults: []ExpectedResult{
 				{
 					matchingApp: "*",
@@ -334,7 +334,7 @@ func Test_reverseProxy(t *testing.T) {
 					body:        "Query string parameter keys: query\n",
 				},
 			},
-		},*/
+		},
 		{
 			baseName: "admin_bypass_from_nested_labelstore",
 			URL:      `/api/v1/query?query=some_metric{tenant_id="whocaresweretheadmin"} != 1337`,
@@ -537,6 +537,44 @@ func Test_reverseProxy(t *testing.T) {
 					matchingApp: "group_from_header",
 					status:      http.StatusForbidden,
 					body:        "no tenant labels are configured for the user\n",
+				},
+			},
+		},
+		{
+			baseName: "loki_query_group_from_header",
+			URL:      `/loki/api/v1/query_range?direction=backward&end=1690463973693000000&limit=10&query={tenant_id="tenant_id_g2"}`,
+			headers:  map[string]string{"GroupHeader": "somegroup,group1,othergroup"}, // empty encryption key should let this work
+			expectedResults: []ExpectedResult{
+				{
+					matchingApp: "*",
+					status:      http.StatusForbidden,
+					body:        "got no value for the HTTP header which is expected to contain the JWT\n",
+				},
+				{
+					matchingApp: "group_from_header",
+					status:      http.StatusOK,
+					body:        "Query string parameter keys: direction,end,limit,query\n",
+				},
+			},
+		},
+		{
+			baseName: "loki_query_group_from_header_with_distraction",
+			URL:      `/loki/api/v1/query_range?direction=backward&end=1690463973693000000&limit=10&query={tenant_id="tenant_id_g1"}`,
+			headers: map[string]string{
+				"Authorization": "Bearer " + tokens["invalidTenant"], // token configured with user name which is not in config store
+				"MagicHeader":   "invalid",                           // not helpful
+				"GroupHeader":   "somegroup,group1,othergroup",       // empty encryption key should let this work
+			},
+			expectedResults: []ExpectedResult{
+				{
+					matchingApp: "*",
+					status:      http.StatusForbidden,
+					body:        "no tenant labels are configured for the user\n",
+				},
+				{
+					matchingApp: "group_from_header",
+					status:      http.StatusOK,
+					body:        "Query string parameter keys: direction,end,limit,query\n",
 				},
 			},
 		},

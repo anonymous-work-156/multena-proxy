@@ -212,7 +212,7 @@ func checkBypassHeader(r *http.Request, app *App) bool {
 func checkGroupHeader(r *http.Request, app *App) []string {
 
 	// check for group membership via header (can also bypass enforcement)
-	if app.Cfg.Web.HeaderToDefineGroups.Enabled && app.Cfg.Web.HeaderToDefineGroups.Name != "" && app.HeaderToDefineGroupsEncryptionKey != "" {
+	if app.Cfg.Web.HeaderToDefineGroups.Enabled && app.Cfg.Web.HeaderToDefineGroups.Name != "" {
 		val := r.Header.Get(app.Cfg.Web.HeaderToDefineGroups.Name)
 		if val != "" {
 			groups, err := decryptGroupHeader(val, app.HeaderToDefineGroupsEncryptionKey)
@@ -232,41 +232,51 @@ func checkGroupHeader(r *http.Request, app *App) []string {
 
 // decryptGroupHeader decrypts base64-encoded header payload with a base64-encoded 32-byte key
 func decryptGroupHeader(base64HeaderPayload string, base64Key string) ([]string, error) {
-	key, err := base64.StdEncoding.DecodeString(base64Key)
-	if err != nil {
-		return nil, err
-	}
-	ciphertext, err := base64.StdEncoding.DecodeString(base64HeaderPayload)
-	if err != nil {
-		return nil, err
+	var plaintext string
+	if base64Key == "" {
+		// mostly this is a test feature
+		// if the encryption key is blank we assume the payload is naked comma separated values
+		// since the encryption key is set in server config, it should not be anything exploitable by clients
+		plaintext = base64HeaderPayload
+	} else {
+		key, err := base64.StdEncoding.DecodeString(base64Key)
+		if err != nil {
+			return nil, err
+		}
+		ciphertext, err := base64.StdEncoding.DecodeString(base64HeaderPayload)
+		if err != nil {
+			return nil, err
+		}
+
+		// create cipher block
+		block, err := aes.NewCipher(key)
+		if err != nil {
+			return nil, err
+		}
+
+		// create GCM
+		gcm, err := cipher.NewGCM(block)
+		if err != nil {
+			return nil, err
+		}
+
+		// extract nonce
+		nonceSize := gcm.NonceSize()
+		if len(ciphertext) < nonceSize {
+			return nil, fmt.Errorf("ciphertext too short")
+		}
+		nonce, ciphertext := ciphertext[:nonceSize], ciphertext[nonceSize:]
+
+		// decrypt payload
+		plaintextbytes, err := gcm.Open(nil, nonce, ciphertext, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		plaintext = string(plaintextbytes)
 	}
 
-	// create cipher block
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return nil, err
-	}
-
-	// create GCM
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, err
-	}
-
-	// extract nonce
-	nonceSize := gcm.NonceSize()
-	if len(ciphertext) < nonceSize {
-		return nil, fmt.Errorf("ciphertext too short")
-	}
-	nonce, ciphertext := ciphertext[:nonceSize], ciphertext[nonceSize:]
-
-	// decrypt payload
-	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return strings.Split(string(plaintext), ","), nil
+	return strings.Split(plaintext, ","), nil
 }
 
 // streamUp forwards the provided HTTP request to the specified upstream URL using a reverse proxy.
