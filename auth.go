@@ -93,22 +93,22 @@ func parseJwtToken(tokenString string, a *App) (OAuthToken, *jwt.Token, error) {
 	return oAuthToken, token, nil
 }
 
-// validateLabels validates the labels in the OAuth token.
+// lookupLabels looks up the labels based on user/group info in the OAuth token.
 // It checks if the user is in the special configured admin group (unrelated to the label store) and skips label enforcement if true.
 // Returns a list of valid values for the tenant label, a boolean indicating whether label enforcement should be skipped,
 // and any error that occurred during validation.
-func validateLabels(token OAuthToken, a *App) ([]string, bool, error) {
-	if isAdmin(token, a) {
-		log.Debug().Str("user", token.PreferredUsername).Bool("Admin", true).Msg("Skipping label enforcement (due to special configured admin group)")
+func lookupLabels(token OAuthToken, origin string, a *App) ([]string, bool, error) {
+	if isAdmin(token.Groups, a) {
+		log.Debug().Str("origin", origin).Str("user", token.PreferredUsername).Bool("Admin", true).Msg("Skipping label enforcement (due to special configured admin group)")
 		return nil, true, nil
 	}
 
 	tenantLabels, skip := a.LabelStore.GetLabels(token, a)
 	if skip {
-		log.Debug().Str("user", token.PreferredUsername).Bool("Admin", false).Msg("Skipping label enforcement (due to label store configuration)")
+		log.Debug().Str("origin", origin).Str("user", token.PreferredUsername).Bool("Admin", false).Msg("Skipping label enforcement (due to label store configuration)")
 		return nil, true, nil
 	}
-	log.Debug().Str("user", token.PreferredUsername).Strs("labels", tenantLabels).Msg("Resulting labels in validateLabels()")
+	log.Debug().Str("origin", origin).Str("user", token.PreferredUsername).Strs("labels", tenantLabels).Msg("Resulting labels in lookupLabels()")
 
 	if len(tenantLabels) < 1 {
 		return nil, false, fmt.Errorf("no tenant labels are configured for the user") // FIXME: this error is badly formatted, and sometimes unhelpful
@@ -118,6 +118,6 @@ func validateLabels(token OAuthToken, a *App) ([]string, bool, error) {
 
 // isAdmin determines if the token indicates a member of the special configured admin group.
 // Note that this is a separate system from what can be configured in the label store.
-func isAdmin(token OAuthToken, a *App) bool {
-	return a.Cfg.Admin.GroupBypass && slices.Contains[[]string, string](token.Groups, a.Cfg.Admin.Group)
+func isAdmin(groups []string, a *App) bool {
+	return a.Cfg.Admin.GroupBypass && slices.Contains[[]string, string](groups, a.Cfg.Admin.Group)
 }

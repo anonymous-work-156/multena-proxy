@@ -33,11 +33,11 @@ type Config struct {
 		HeaderContainingJWT string `yaml:"header_containing_jwt"`
 		OAuthGroupName      string `yaml:"oauth_group_name"` // the token claim field name in which to find group membership
 
-		HeaderToDefineGroups struct {
+		GroupFromHeader struct {
 			Enabled           bool   `yaml:"enabled"`             // enable or disable headers for defining groups
 			Name              string `yaml:"name"`                // header name
 			EncryptionKeyPath string `yaml:"encryption_key_path"` // path to file containing encryption key for header contents
-		} `yaml:"header_to_define_groups"`
+		} `yaml:"group_from_header"`
 
 		LabelStoreKind string `yaml:"label_store_kind"` // choose: configmap, mysql
 		LabelStoreFile string `yaml:"label_store_file"` // base name of label config file (ignored with label_store_kind: mysql)
@@ -52,7 +52,7 @@ type Config struct {
 			Enabled bool   `yaml:"enabled"` // enable or disable magic header bypass
 			Key     string `yaml:"key"`     // header name for bypass
 			Value   string `yaml:"value"`   // header value for bypass
-		} `yaml:"header"`
+		} `yaml:"header_bypass"`
 	} `yaml:"admin"`
 
 	Dev struct {
@@ -213,12 +213,12 @@ func (a *App) WithJWKS() *App {
 }
 
 func (a *App) WithTokenForGroups() *App {
-	if a.Cfg.Web.HeaderToDefineGroups.Enabled {
-		key, err := os.ReadFile(a.Cfg.Web.HeaderToDefineGroups.EncryptionKeyPath)
+	if a.Cfg.Web.GroupFromHeader.Enabled {
+		key, err := os.ReadFile(a.Cfg.Web.GroupFromHeader.EncryptionKeyPath)
 		if err != nil {
 			log.Fatal().Err(err).Msg("Error while reading encryption key for header to define groups")
 		}
-		a.HeaderToDefineGroupsEncryptionKey = string(key)
+		a.GroupFromHeaderEncryptionKey = string(key)
 	}
 	return a
 }

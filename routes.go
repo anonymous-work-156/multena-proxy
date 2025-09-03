@@ -157,10 +157,16 @@ func innerHandler(matchWord string, enforcer EnforceQL, w http.ResponseWriter, r
 	}
 
 	var labels []string
+	var err error
 
 	groups := checkGroupHeader(r, a)
 	if len(groups) > 0 {
-		labels, skip = a.LabelStore.GetLabels(OAuthToken{Groups: groups}, a)
+		log.Debug().Msg("Got groups from the group header.")
+		labels, skip, err = lookupLabels(OAuthToken{Groups: groups}, "group header", a)
+		if err != nil {
+			logAndWriteError(w, http.StatusForbidden, err, "")
+			return false
+		}
 	} else {
 		oauthToken, err := getToken(r, a)
 		if err != nil {
@@ -168,7 +174,7 @@ func innerHandler(matchWord string, enforcer EnforceQL, w http.ResponseWriter, r
 			return false
 		}
 
-		labels, skip, err = validateLabels(oauthToken, a)
+		labels, skip, err = lookupLabels(oauthToken, "OAuth payload", a)
 		if err != nil {
 			logAndWriteError(w, http.StatusForbidden, err, "")
 			return false
@@ -212,10 +218,10 @@ func checkBypassHeader(r *http.Request, app *App) bool {
 func checkGroupHeader(r *http.Request, app *App) []string {
 
 	// check for group membership via header (can also bypass enforcement)
-	if app.Cfg.Web.HeaderToDefineGroups.Enabled && app.Cfg.Web.HeaderToDefineGroups.Name != "" {
-		val := r.Header.Get(app.Cfg.Web.HeaderToDefineGroups.Name)
+	if app.Cfg.Web.GroupFromHeader.Enabled && app.Cfg.Web.GroupFromHeader.Name != "" {
+		val := r.Header.Get(app.Cfg.Web.GroupFromHeader.Name)
 		if val != "" {
-			groups, err := decryptGroupHeader(val, app.HeaderToDefineGroupsEncryptionKey)
+			groups, err := decryptGroupHeader(val, app.GroupFromHeaderEncryptionKey)
 			if err != nil {
 				log.Debug().Msg("Failed to interpret groups header.")
 				return nil

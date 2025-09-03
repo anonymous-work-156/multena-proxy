@@ -58,9 +58,9 @@ func makeTestApp(jwksServer, upstreamServer *httptest.Server, cmh *ConfigMapHand
 		app.Cfg.Admin.HeaderBypass.Value = "notaverygoodsecret"
 	}
 
-	app.Cfg.Web.HeaderToDefineGroups.Enabled = groupsHeader
+	app.Cfg.Web.GroupFromHeader.Enabled = groupsHeader
 	if groupsHeader {
-		app.Cfg.Web.HeaderToDefineGroups.Name = "GroupHeader"
+		app.Cfg.Web.GroupFromHeader.Name = "GroupHeader"
 	}
 
 	app.LabelStore = cmh

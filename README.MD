@@ -29,3 +29,17 @@ As time has passed, a notable percentage of the total code has been replaced.
 ## Relevance now that Grafana supports LBAC
 
 Grafana itself now [supports label-based access control](https://grafana.com/docs/grafana/latest/administration/data-source-management/teamlbac/), however gaining access to the functionality appears to be expensive if you operate at some scale.  Its not very difficult or expensive to run a proxy that may meet your LBAC needs.
+
+## Various Options to Configure Label Enforcement
+
+This fork of [multena-proxy](https://github.com/gepaplexx/multena-proxy) adds new options.
+
+User name and group membership is determined in one of two ways:
+1.  An OAuth HTTP header that establishes user name and group membership, suitable for a proxy instance serving one Grafana that is being shared between teams
+2.  A special HTTP header that lists group membership (typically protected by symmetric encryption), suitable for a proxy instance that is serving multiple Grafana instances, each of which is dedicated to a team
+
+Users, groups or just connections can be flagged for LBAC bypass (sometimes called "admin" rights) by one of:
+1.  a single group specified in the main configuration, *and/or*
+2.  (for the old label config CM format) a special value specified in the main configuration, which is then included as a label value in the label configuration, serving as a flag for the associated user or group, *and/or*
+3.  (for the new label config CM format) a dedicated section lists flagged users and groups, *and/or*
+4.  a special HTTP header and value which renders user or group membership unimportant

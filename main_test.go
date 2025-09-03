@@ -578,6 +578,87 @@ func Test_reverseProxy(t *testing.T) {
 				},
 			},
 		},
+		{
+			baseName: "loki_query_unhelpful_group_from_header",
+			URL:      `/loki/api/v1/query_range?direction=backward&end=1690463973693000000&limit=10&query={tenant_id="tenant_id_u1"}`,
+			headers: map[string]string{
+				"Authorization": "Bearer " + tokens["userTenant"], // should be fine
+				"GroupHeader":   "somegroup,othergroup",           // these groups should lead nowhere, get the valid user OAuth stuff igored
+			},
+			expectedResults: []ExpectedResult{
+				{
+					matchingApp: "*",
+					status:      http.StatusOK,
+					body:        "Query string parameter keys: direction,end,limit,query\n",
+				},
+				{
+					matchingApp: "group_from_header",
+					status:      http.StatusForbidden,
+					body:        "no tenant labels are configured for the user\n",
+				},
+			},
+		},
+		{
+			baseName: "loki_query_group_from_header_invalid_groups_1",
+			URL:      `/loki/api/v1/query_range?direction=backward&end=1690463973693000000&limit=10&query={tenant_id="tenant_id_u1"}`,
+			headers:  map[string]string{"GroupHeader": "somegroup,othergroup"}, // these groups should lead nowhere
+			expectedResults: []ExpectedResult{
+				{
+					matchingApp: "*",
+					status:      http.StatusForbidden,
+					body:        "got no value for the HTTP header which is expected to contain the JWT\n",
+				},
+				{
+					matchingApp: "group_from_header",
+					status:      http.StatusForbidden,
+					body:        "no tenant labels are configured for the user\n",
+				},
+			},
+		},
+		{
+			baseName: "loki_query_group_from_header_invalid_groups_2",
+			URL:      `/loki/api/v1/query_range?direction=backward&end=1690463973693000000&limit=10&query={tenant_id="tenant_id_u1"}`,
+			headers:  map[string]string{"GroupHeader": ","}, // these empty-string groups should lead nowhere
+			expectedResults: []ExpectedResult{
+				{
+					matchingApp: "*",
+					status:      http.StatusForbidden,
+					body:        "got no value for the HTTP header which is expected to contain the JWT\n",
+				},
+				{
+					matchingApp: "group_from_header",
+					status:      http.StatusForbidden,
+					body:        "no tenant labels are configured for the user\n",
+				},
+			},
+		},
+		{
+			baseName: "loki_query_group_from_header_no_groups_no_oauth",
+			URL:      `/loki/api/v1/query_range?direction=backward&end=1690463973693000000&limit=10&query={tenant_id="tenant_id_u1"}`,
+			headers:  map[string]string{"GroupHeader": ""}, // should cause the header to be ignored
+			expectedResults: []ExpectedResult{
+				{
+					matchingApp: "*",
+					status:      http.StatusForbidden,
+					body:        "got no value for the HTTP header which is expected to contain the JWT\n",
+				},
+			},
+		},
+		{
+			baseName: "loki_query_group_from_header_no_groups",
+			URL:      `/loki/api/v1/query_range?direction=backward&end=1690463973693000000&limit=10&query={tenant_id="tenant_id_u1"}`,
+			headers: map[string]string{
+				"Authorization": "Bearer " + tokens["userTenant"], // should be fine
+				"GroupHeader":   "",                               // should cause the header to be ignored
+			},
+			expectedResults: []ExpectedResult{
+				{
+					matchingApp: "*",
+					status:      http.StatusOK,
+					body:        "Query string parameter keys: direction,end,limit,query\n",
+				},
+			},
+		},
 	}
 
 	for appname, app := range appmap {
@@ -638,19 +719,19 @@ func TestIsAdminSkip(t *testing.T) {
 	app.Cfg.Admin.Group = "gepardec-run-admins"
 
 	token := &OAuthToken{Groups: []string{"gepardec-run-admins"}}
-	a.True(isAdmin(*token, app))
+	a.True(isAdmin(token.Groups, app))
 	app.Cfg.Admin.GroupBypass = false // show that we need group bypass to be enabled
-	a.False(isAdmin(*token, app))
+	a.False(isAdmin(token.Groups, app))
 
 	app.Cfg.Admin.GroupBypass = true
 	token.Groups = []string{"usergroup"} // not admin group
-	a.False(isAdmin(*token, app))
+	a.False(isAdmin(token.Groups, app))
 	app.Cfg.Admin.GroupBypass = false
-	a.False(isAdmin(*token, app))
+	a.False(isAdmin(token.Groups, app))
 
 	app.Cfg.Admin.GroupBypass = true
 	token.Groups = []string{"gepardec-run-admins", "g2", "g3"}
-	a.True(isAdmin(*token, app))
+	a.True(isAdmin(token.Groups, app))
 }
 
 func TestLogAndWriteError(t *testing.T) {

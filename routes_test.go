@@ -92,21 +92,21 @@ func TestCheckGroupHeader(t *testing.T) {
 
 	app := &App{}
 	app.WithConfig()
-	app.Cfg.Web.HeaderToDefineGroups.Enabled = true
-	app.Cfg.Web.HeaderToDefineGroups.Name = "GroupsDefinedHere"
-	app.HeaderToDefineGroupsEncryptionKey = base64Key
+	app.Cfg.Web.GroupFromHeader.Enabled = true
+	app.Cfg.Web.GroupFromHeader.Name = "GroupsDefinedHere"
+	app.GroupFromHeaderEncryptionKey = base64Key
 
 	// send something not base64-encoded
 	groupHeaderVal := "invalid"
 	req, _ := http.NewRequest("GET", "/some/api", nil)
-	req.Header.Add(app.Cfg.Web.HeaderToDefineGroups.Name, groupHeaderVal)
+	req.Header.Add(app.Cfg.Web.GroupFromHeader.Name, groupHeaderVal)
 	groups := checkGroupHeader(req, app)
 	a.Nil(groups)
 
 	// send something that is base64-encoded, but is not encrypted
 	groupHeaderVal = base64.StdEncoding.EncodeToString([]byte("invalid"))
 	req, _ = http.NewRequest("GET", "/some/api", nil)
-	req.Header.Add(app.Cfg.Web.HeaderToDefineGroups.Name, groupHeaderVal)
+	req.Header.Add(app.Cfg.Web.GroupFromHeader.Name, groupHeaderVal)
 	groups = checkGroupHeader(req, app)
 	a.Nil(groups)
 
@@ -116,7 +116,7 @@ func TestCheckGroupHeader(t *testing.T) {
 		panic(err)
 	}
 	req, _ = http.NewRequest("GET", "/some/api", nil)
-	req.Header.Add(app.Cfg.Web.HeaderToDefineGroups.Name, groupHeaderVal)
+	req.Header.Add(app.Cfg.Web.GroupFromHeader.Name, groupHeaderVal)
 	groups = checkGroupHeader(req, app)
 	a.Nil(groups)
 
@@ -126,7 +126,7 @@ func TestCheckGroupHeader(t *testing.T) {
 		panic(err)
 	}
 	req, _ = http.NewRequest("GET", "/some/api", nil)
-	req.Header.Add(app.Cfg.Web.HeaderToDefineGroups.Name, groupHeaderVal)
+	req.Header.Add(app.Cfg.Web.GroupFromHeader.Name, groupHeaderVal)
 	groups = checkGroupHeader(req, app)
 	a.EqualValues([]string{"test_group"}, groups)
 }

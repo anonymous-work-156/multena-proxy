@@ -62,13 +62,14 @@ type ConfigMapHandler struct {
 func (c *ConfigMapHandler) Connect(a App) error {
 	yamlFile, err := tryReadFile("/etc/config/labels/" + a.Cfg.Web.LabelStoreFile + ".yaml") // expected to be here deployed in a pod (mounted ConfigMap)
 	if err == nil {
-		log.Info().Msg("Read label config file at first potential path.")
+		log.Info().Msg("Have loaded label config file from first potential path.")
 	} else {
+		log.Info().Err(err).Msg("Failed to read label config file from first potential path.")
 		yamlFile, err = tryReadFile("./configs/" + a.Cfg.Web.LabelStoreFile + ".yaml") // expected to be here for test cases
 		if err == nil {
-			log.Info().Msg("Read label config file at second potential path.")
+			log.Info().Msg("Have loaded label config file from second potential path.")
 		} else {
-			log.Fatal().Err(err).Msg("Failed to read config file in second potential path.")
+			log.Fatal().Err(err).Msg("Failed to read label config file at either the first or second possible path.")
 		}
 	}
 
@@ -101,13 +102,13 @@ func (c *ConfigMapHandler) GetLabels(token OAuthToken, a *App) ([]string, bool) 
 		for _, entityName := range c.nestedLabels.Admins {
 
 			// check the username against the list of admins
-			if entityName == token.PreferredUsername {
+			if entityName == token.PreferredUsername && token.PreferredUsername != "" {
 				return nil, true
 			}
 
 			// check each group against the list of admins
 			for _, group := range token.Groups {
-				if entityName == group {
+				if entityName == group && group != "" {
 					return nil, true
 				}
 			}
@@ -117,7 +118,7 @@ func (c *ConfigMapHandler) GetLabels(token OAuthToken, a *App) ([]string, bool) 
 		for _, solution := range c.nestedLabels.Solutions {
 		startSolution:
 			for _, comparisonGroup := range solution.Groups {
-				if comparisonGroup == token.PreferredUsername {
+				if comparisonGroup == token.PreferredUsername && token.PreferredUsername != "" {
 					// having found a user match, we grab all the label values and proceed to the next 'solution'
 					for _, filterVal := range solution.FilterValues {
 						log.Trace().Str("label value", filterVal).Msg("Keep label value.")
@@ -127,7 +128,7 @@ func (c *ConfigMapHandler) GetLabels(token OAuthToken, a *App) ([]string, bool) 
 				}
 
 				for _, group := range token.Groups {
-					if comparisonGroup == group {
+					if comparisonGroup == group && group != "" {
 						// having found a group match, we grab all the label values and proceed to the next 'solution'
 						for _, filterVal := range solution.FilterValues {
 							log.Trace().Str("label value", filterVal).Msg("Keep label value.")
@@ -142,20 +143,26 @@ func (c *ConfigMapHandler) GetLabels(token OAuthToken, a *App) ([]string, bool) 
 		log.Debug().Msg("Linear label CM format.")
 
 		// see if there is something named after our user
-		for k, v := range c.labels[token.PreferredUsername] {
-			if !v {
-				log.Trace().Str("label value", k).Msg("Ignore label value because it is marked as false-ey.")
-				continue // pointing a key at false is the same as not including the key at all
-			}
-			log.Trace().Str("label value", k).Msg("Keep label value.")
-			mergedValues[k] = true
-			if a != nil && a.Cfg.Admin.MagicValueBypass && k == a.Cfg.Admin.MagicValue {
-				return nil, true
+		if token.PreferredUsername != "" {
+			for k, v := range c.labels[token.PreferredUsername] {
+				if !v {
+					log.Trace().Str("label value", k).Msg("Ignore label value because it is marked as false-ey.")
+					continue // pointing a key at false is the same as not including the key at all
+				}
+				log.Trace().Str("label value", k).Msg("Keep label value.")
+				mergedValues[k] = true
+				if a != nil && a.Cfg.Admin.MagicValueBypass && k == a.Cfg.Admin.MagicValue {
+					return nil, true
+				}
 			}
 		}
 
 		// see if any of the groups from the token have a section
 		for _, group := range token.Groups {
+			if group == "" {
+				// throughout this function, we deny matches for empty users or groups, because relying on that behavior would be crazy
+				continue
+			}
 			for k, v := range c.labels[group] {
 				if !v {
 					log.Trace().Str("label value", k).Msg("Ignore label value because it is marked as false-ey.")
